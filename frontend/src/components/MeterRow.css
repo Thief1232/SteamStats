@@ -1,0 +1,45 @@
+.meterrow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13.5px;
+  border-radius: 2px;
+}
+
+.meterrow:hover {
+  background: rgba(231, 229, 222, 0.05);
+}
+
+.meterrow-rank {
+  font-size: 12px;
+  width: 1.6em;
+}
+
+.meterrow-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meterrow-meter {
+  font-size: 13px;
+  letter-spacing: -1px;
+}
+
+.meterrow-value {
+  white-space: nowrap;
+  text-align: right;
+  min-width: 9ch;
+  font-size: 12.5px;
+}
+
+@media (max-width: 560px) {
+  .meterrow {
+    grid-template-columns: auto 1fr auto;
+  }
+  .meterrow-meter {
+    display: none;
+  }
+}

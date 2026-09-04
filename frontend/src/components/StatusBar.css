@@ -1,0 +1,43 @@
+.statusbar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  background: var(--line);
+  border-top: 1px solid var(--line-bright);
+  margin-top: auto;
+}
+
+.statusbar-item {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 8px 10px;
+  background: var(--screen);
+  color: var(--fg-dim);
+  border: none;
+  cursor: pointer;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+}
+
+.statusbar-item:disabled {
+  cursor: default;
+  color: var(--fg-faint);
+}
+
+.statusbar-item:not(:disabled):hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+.statusbar-item:not(:disabled):hover .statusbar-key {
+  color: var(--bg);
+}
+
+.statusbar-key {
+  color: var(--fg);
+  font-weight: 600;
+}

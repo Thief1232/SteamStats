@@ -1,0 +1,25 @@
+.dotrow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+
+.dotrow-label {
+  color: var(--fg-dim);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 12.5px;
+}
+
+.dotrow-leader {
+  flex: 1;
+  border-bottom: 1px dotted var(--fg-faint);
+  transform: translateY(-3px);
+}
+
+.dotrow-value {
+  white-space: nowrap;
+}
