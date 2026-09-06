@@ -11,19 +11,37 @@ async function request(path, options) {
     credentials: 'include',
     ...options,
   });
-  if (res.status === 401) return null;
-  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`${path} -> ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  if (res.status === 204) return null;
   return res.json();
 }
 
+// undefined = still checking, null = signed out, object = signed in.
+// Auth is optional site-wide — this is only used to offer a "my profile" shortcut.
 export async function getMe() {
   if (!API_BASE) return mockMe;
-  return request('/api/me');
+  try {
+    return await request('/api/me');
+  } catch (err) {
+    if (err.status === 401) return null;
+    throw err;
+  }
 }
 
-export async function getLibrary() {
+// lookup — SteamID64 or vanity name. Throws with .status 404 if it resolves to nothing.
+export async function getUser(lookup) {
+  if (!API_BASE) return { ...mockMe.steam, visibility: 'public' };
+  return request(`/api/users/${encodeURIComponent(lookup)}`);
+}
+
+// steamId — resolved SteamID64 from getUser(). Throws with .status 403 if the profile is private.
+export async function getUserLibrary(steamId) {
   if (!API_BASE) return mockLibrary;
-  return request('/api/library');
+  return request(`/api/users/${encodeURIComponent(steamId)}/library`);
 }
 
 export async function logout() {

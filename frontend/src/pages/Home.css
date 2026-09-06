@@ -45,6 +45,41 @@
   margin-bottom: 28px;
 }
 
+.lookup-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(420px, 90vw);
+  border: 1px solid var(--line);
+  background: var(--screen);
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+
+.lookup-prompt {
+  color: var(--fg-faint);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.lookup-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+}
+
+.lookup-input:focus {
+  outline: none;
+}
+
+.lookup-input::placeholder {
+  color: var(--fg-faint);
+}
+
 .menu {
   display: flex;
   flex-direction: column;

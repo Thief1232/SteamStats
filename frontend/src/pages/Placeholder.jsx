@@ -21,8 +21,8 @@ Bad command or file name.
 Модуль ещё не скомпилирован оператором.
 `}
       </pre>
-      <Link className="soon-back" to="/dashboard">
-        &gt; RETURN TO DASHBOARD.EXE
+      <Link className="soon-back" to="/">
+        &gt; RETURN TO STEAMSTATS.EXE
       </Link>
     </div>
   );
