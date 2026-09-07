@@ -1,15 +1,15 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.services.logic import resolve_vanity
+from src.db.connection import get_session
+from src.services.logic import get_or_refresh_profile
+from src.schemas.schemas import UserProfile
 
 router = APIRouter()
 
-def is_steamid64(lookup: str) -> bool:
-    return lookup.isdigit() and len(lookup) == 17
-
-@router.get("/api/users/{lookup}")
-async def get_user(lookup: str):
-    steam_id = lookup if is_steamid64(lookup) else await resolve_vanity(lookup)
-    if steam_id is None:
+@router.get("/api/users/{lookup}", response_model=UserProfile)
+async def get_user(lookup: str, session: AsyncSession = Depends(get_session)):
+    account = await get_or_refresh_profile(session, lookup)
+    if account is None:
         raise HTTPException(404)
-    return {"steam_id": steam_id}
+    return UserProfile.from_row(account)
