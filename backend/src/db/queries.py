@@ -1,16 +1,26 @@
 from datetime import datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import SteamAccount, OwnedGame, Game
+from src.db.models import Game, OwnedGame, SteamAccount
 
-async def get_steam_account(session: AsyncSession, steam_id: int) -> SteamAccount | None:
+
+async def get_steam_account(
+    session: AsyncSession, steam_id: int
+) -> SteamAccount | None:
     return await session.get(SteamAccount, steam_id)
 
+
 async def upsert_steam_account(
-    session: AsyncSession, steam_id: int, persona_name: str, avatar_url: str | None,
-    profile_url: str, account_created: datetime | None, visibility: str,
+    session: AsyncSession,
+    steam_id: int,
+    persona_name: str,
+    avatar_url: str | None,
+    profile_url: str,
+    account_created: datetime | None,
+    visibility: str,
 ) -> SteamAccount:
     stmt = insert(SteamAccount).values(
         steam_id=steam_id,
@@ -36,9 +46,13 @@ async def upsert_steam_account(
     return result.scalar_one()
 
 
-async def get_library_last_fetch(session: AsyncSession, steam_id: int) -> datetime | None:
+async def get_library_last_fetch(
+    session: AsyncSession, steam_id: int
+) -> datetime | None:
     result = await session.execute(
-        select(func.max(OwnedGame.last_fetched_at)).where(OwnedGame.steam_id == steam_id)
+        select(func.max(OwnedGame.last_fetched_at)).where(
+            OwnedGame.steam_id == steam_id
+        )
     )
     return result.scalar_one_or_none()
 
@@ -70,6 +84,7 @@ async def upsert_owned_games(session: AsyncSession, rows: list[dict]) -> None:
         },
     )
     await session.execute(stmt)
+
 
 async def get_library(session: AsyncSession, steam_id: int) -> list:
     result = await session.execute(
