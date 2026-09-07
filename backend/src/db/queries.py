@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +10,7 @@ async def get_steam_account(session: AsyncSession, steam_id: int) -> SteamAccoun
 
 async def upsert_steam_account(
     session: AsyncSession, steam_id: int, persona_name: str, avatar_url: str | None,
-    profile_url: str, account_created, visibility: str,
+    profile_url: str, account_created: datetime | None, visibility: str,
 ) -> SteamAccount:
     stmt = insert(SteamAccount).values(
         steam_id=steam_id,
