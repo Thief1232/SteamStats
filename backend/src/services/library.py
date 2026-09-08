@@ -9,6 +9,14 @@ from src.services.steam_client import fetch_achievements, fetch_owned_games
 
 ACHIEVEMENTS_CONCURRENCY = 10
 
+# steam_id -> (done, total) for an in-flight refresh_achievements() call.
+# In-memory only: fine for a single-process app, purely used for progress polling.
+_achievements_progress: dict[int, tuple[int, int]] = {}
+
+
+def get_achievements_progress(steam_id: int) -> tuple[int, int] | None:
+    return _achievements_progress.get(steam_id)
+
 
 async def _fetch_achievements_limited(
     sem: asyncio.Semaphore, steam_id: int, app_id: int
@@ -47,19 +55,8 @@ async def get_or_refresh_library(session: AsyncSession, steam_id: int) -> bool:
         ],
     )
 
-    sem = asyncio.Semaphore(ACHIEVEMENTS_CONCURRENCY)
-    results = await asyncio.gather(
-        *(
-            _fetch_achievements_limited(sem, steam_id, g["appid"])
-            for g in games
-            if g.get("has_community_visible_stats")
-        )
-    )
-    achievements_by_app = dict(results)
-
     owned_rows = []
     for g in games:
-        achievements = achievements_by_app.get(g["appid"])
         owned_rows.append(
             {
                 "steam_id": steam_id,
@@ -71,11 +68,42 @@ async def get_or_refresh_library(session: AsyncSession, steam_id: int) -> bool:
                 )
                 if g.get("rtime_last_played")
                 else None,
-                "achievements_unlocked": achievements[0] if achievements else None,
-                "achievements_total": achievements[1] if achievements else None,
                 "last_fetched_at": datetime.now(timezone.utc),
             }
         )
     await queries.upsert_owned_games(session, owned_rows)
     await session.commit()
     return True
+
+
+async def refresh_achievements(session: AsyncSession, steam_id: int) -> None:
+    app_ids = await queries.get_owned_app_ids(session, steam_id)
+    total = len(app_ids)
+    _achievements_progress[steam_id] = (0, total)
+
+    sem = asyncio.Semaphore(ACHIEVEMENTS_CONCURRENCY)
+    tasks = [
+        asyncio.create_task(_fetch_achievements_limited(sem, steam_id, app_id))
+        for app_id in app_ids
+    ]
+
+    rows = []
+    done = 0
+    try:
+        for task in asyncio.as_completed(tasks):
+            app_id, ach = await task
+            done += 1
+            _achievements_progress[steam_id] = (done, total)
+            if ach is not None:
+                rows.append(
+                    {
+                        "app_id": app_id,
+                        "achievements_unlocked": ach[0],
+                        "achievements_total": ach[1],
+                    }
+                )
+    finally:
+        _achievements_progress.pop(steam_id, None)
+
+    await queries.update_achievements(session, steam_id, rows)
+    await session.commit()

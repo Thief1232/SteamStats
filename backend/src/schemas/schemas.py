@@ -31,6 +31,11 @@ class Achievements(BaseModel):
     pct: float
 
 
+class AchievementsProgress(BaseModel):
+    done: int
+    total: int
+
+
 class GameEntry(BaseModel):
     app_id: int
     name: str

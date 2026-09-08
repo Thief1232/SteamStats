@@ -44,6 +44,20 @@ export async function getUserLibrary(steamId) {
   return request(`/api/users/${encodeURIComponent(steamId)}/library`);
 }
 
+// Fetches achievement counts for every owned game and returns the updated library.
+// Separate from getUserLibrary because it's slow (one Steam API call per game) — triggered
+// on demand by a button rather than on every profile load.
+export async function refreshLibraryAchievements(steamId) {
+  if (!API_BASE) return mockLibrary;
+  return request(`/api/users/${encodeURIComponent(steamId)}/library/achievements`, { method: 'POST' });
+}
+
+// Polled while refreshLibraryAchievements() is in flight to drive a progress bar.
+export async function getAchievementsProgress(steamId) {
+  if (!API_BASE) return { done: 1, total: 1 };
+  return request(`/api/users/${encodeURIComponent(steamId)}/library/achievements/progress`);
+}
+
 export async function logout() {
   if (!API_BASE) return;
   await request('/api/auth/logout', { method: 'POST' });

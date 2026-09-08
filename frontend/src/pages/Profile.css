@@ -95,3 +95,26 @@
 .chip-flag {
   color: var(--fg);
 }
+
+.ach-load-btn {
+  display: block;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: #000;
+  border: 1px solid var(--fg);
+  color: #fff;
+  cursor: pointer;
+  padding: 8px 16px;
+}
+
+.ach-load-btn:hover:not(:disabled) {
+  background: #1c1c1c;
+}
+
+.ach-load-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

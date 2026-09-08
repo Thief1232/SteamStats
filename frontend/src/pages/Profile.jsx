@@ -4,10 +4,19 @@ import TerminalWindow from '../components/TerminalWindow';
 import DotRow from '../components/DotRow';
 import MeterRow from '../components/MeterRow';
 import StatusBar from '../components/StatusBar';
-import { getUser, getUserLibrary } from '../api/client';
+import { getUser, getUserLibrary, refreshLibraryAchievements, getAchievementsProgress } from '../api/client';
 import { fmtHours, fmtInt, fmtPct, fmtNum, fmtDate } from '../lib/format';
 import './Profile.css';
 import './Placeholder.css';
+
+const PACMAN_WIDTH = 24;
+
+function pacmanBar(done, total) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const filled = total > 0 ? Math.round((done / total) * PACMAN_WIDTH) : 0;
+  const bar = '#'.repeat(filled) + '-'.repeat(PACMAN_WIDTH - filled);
+  return `[${bar}] ${pct}% (${done}/${total})`;
+}
 
 const BUCKETS = [
   { label: '0 Ч (НИКОГДА)', test: (h) => h === 0 },
@@ -24,11 +33,17 @@ export default function Profile() {
   const { lookup } = useParams();
   const [user, setUser] = useState(undefined);
   const [library, setLibrary] = useState(undefined);
+  const [achLoading, setAchLoading] = useState(false);
+  const [achError, setAchError] = useState(false);
+  const [achProgress, setAchProgress] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     setUser(undefined);
     setLibrary(undefined);
+    setAchLoading(false);
+    setAchError(false);
+    setAchProgress(null);
 
     getUser(lookup)
       .then((u) => {
@@ -48,6 +63,32 @@ export default function Profile() {
       cancelled = true;
     };
   }, [lookup]);
+
+  async function handleLoadAchievements() {
+    setAchLoading(true);
+    setAchError(false);
+    setAchProgress({ done: 0, total: library.total_games });
+
+    const poll = setInterval(async () => {
+      try {
+        const p = await getAchievementsProgress(user.steam_id);
+        if (p.total > 0) setAchProgress(p);
+      } catch {
+        // прогресс не критичен — просто пропускаем тик
+      }
+    }, 350);
+
+    try {
+      const lib = await refreshLibraryAchievements(user.steam_id);
+      setLibrary(lib);
+    } catch {
+      setAchError(true);
+    } finally {
+      clearInterval(poll);
+      setAchLoading(false);
+      setAchProgress(null);
+    }
+  }
 
   const stats = useMemo(() => {
     if (!library || typeof library !== 'object') return null;
@@ -168,17 +209,41 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
             </div>
           </TerminalWindow>
 
-          <TerminalWindow title="C:\STEAMSTATS\ACHIEVEMENTS.LOG" right={<span>{stats.achievementGames.length} ИГР СО СТАТИСТИКОЙ</span>}>
-            <div className="list">
-              {stats.achievementGames.map((g) => (
-                <MeterRow
-                  key={g.app_id}
-                  name={g.name}
-                  ratio={g.achievements.pct / 100}
-                  value={`${g.achievements.unlocked}/${g.achievements.total} · ${fmtPct(g.achievements.pct)}%`}
-                />
-              ))}
-            </div>
+          <TerminalWindow
+            title="C:\STEAMSTATS\ACHIEVEMENTS.LOG"
+            right={stats.achievementGames.length > 0 && <span>{stats.achievementGames.length} ИГР СО СТАТИСТИКОЙ</span>}
+          >
+            <button className="ach-load-btn" onClick={handleLoadAchievements} disabled={achLoading}>
+              {achLoading
+                ? pacmanBar(achProgress?.done ?? 0, achProgress?.total ?? 0)
+                : stats.achievementGames.length > 0
+                  ? '> ОБНОВИТЬ ДОСТИЖЕНИЯ'
+                  : '> ЗАГРУЗИТЬ ДОСТИЖЕНИЯ'}
+            </button>
+            {achError && (
+              <div className="dim" style={{ marginTop: 12 }}>
+                Не удалось загрузить достижения. Попробуйте ещё раз.
+              </div>
+            )}
+            {stats.achievementGames.length > 0 ? (
+              <div className="list" style={{ marginTop: 16 }}>
+                {stats.achievementGames.map((g) => (
+                  <MeterRow
+                    key={g.app_id}
+                    name={g.name}
+                    ratio={g.achievements.pct / 100}
+                    value={`${g.achievements.unlocked}/${g.achievements.total} · ${fmtPct(g.achievements.pct)}%`}
+                  />
+                ))}
+              </div>
+            ) : (
+              !achLoading &&
+              !achError && (
+                <div className="dim" style={{ marginTop: 12 }}>
+                  Достижения не тянутся автоматически, чтобы не замедлять открытие профиля.
+                </div>
+              )
+            )}
           </TerminalWindow>
 
           <div className="two-col">

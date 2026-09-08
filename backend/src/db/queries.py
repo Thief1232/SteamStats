@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime  # noqa: I001
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update, bindparam
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,8 +78,6 @@ async def upsert_owned_games(session: AsyncSession, rows: list[dict]) -> None:
             "playtime_minutes": stmt.excluded.playtime_minutes,
             "playtime_2weeks_minutes": stmt.excluded.playtime_2weeks_minutes,
             "last_played": stmt.excluded.last_played,
-            "achievements_unlocked": stmt.excluded.achievements_unlocked,
-            "achievements_total": stmt.excluded.achievements_total,
             "last_fetched_at": stmt.excluded.last_fetched_at,
         },
     )
@@ -93,3 +91,33 @@ async def get_library(session: AsyncSession, steam_id: int) -> list:
         .where(OwnedGame.steam_id == steam_id)
     )
     return result.all()
+
+async def get_owned_app_ids(session: AsyncSession, steam_id: int) -> list[int]:
+    result = await session.execute(
+        select(OwnedGame.app_id).where(OwnedGame.steam_id == steam_id)
+    )
+    return list(result.scalars().all())
+
+
+async def update_achievements(session: AsyncSession, steam_id: int, rows: list[dict]) -> None:
+    if not rows:
+        return
+    stmt = (
+        update(OwnedGame.__table__)
+        .where(OwnedGame.steam_id == steam_id, OwnedGame.app_id == bindparam("b_app_id"))
+        .values(
+            achievements_unlocked=bindparam("b_unlocked"),
+            achievements_total=bindparam("b_total"),
+        )
+    )
+    await session.execute(
+        stmt,
+        [
+            {
+                "b_app_id": r["app_id"],
+                "b_unlocked": r["achievements_unlocked"],
+                "b_total": r["achievements_total"],
+            }
+            for r in rows
+        ],
+    )
