@@ -112,3 +112,32 @@ class Library(BaseModel):
             games=games,
             recent=recent,
         )
+
+class SteamLink(BaseModel):
+    steam_id: str
+    persona_name: str
+    avatar_url: str | None
+    profile_url: str | None
+    account_created: int | None
+    linked_at: int | None
+
+    @classmethod
+    def from_row(cls, row) -> "SteamLink":
+        return cls(
+            steam_id=str(row.steam_id),
+            persona_name=row.persona_name,
+            avatar_url=row.avatar_url,
+            profile_url=row.profile_url,
+            account_created=int(row.account_created.timestamp()) if row.account_created else None,
+            linked_at=int(row.linked_at.timestamp()) if row.linked_at else None,
+        )
+
+
+class Me(BaseModel):
+    id: int
+    username: str
+    steam: SteamLink
+
+    @classmethod
+    def from_rows(cls, user, account) -> "Me":
+        return cls(id=user.id, username=user.username, steam=SteamLink.from_row(account))

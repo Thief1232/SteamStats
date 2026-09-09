@@ -47,3 +47,10 @@ CREATE TABLE IF NOT EXISTS owned_games (
     last_fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (steam_id, app_id)
 );
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL
+);

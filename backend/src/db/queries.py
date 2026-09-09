@@ -1,10 +1,10 @@
 from datetime import datetime  # noqa: I001
 
-from sqlalchemy import func, select, update, bindparam
+from sqlalchemy import delete, func, select, update, bindparam
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db.models import Game, OwnedGame, SteamAccount
+from src.db.models import Game, OwnedGame, Session, SteamAccount, User
 
 
 async def get_steam_account(
@@ -121,3 +121,46 @@ async def update_achievements(session: AsyncSession, steam_id: int, rows: list[d
             for r in rows
         ],
     )
+
+
+async def create_user(session: AsyncSession, username: str) -> User:
+    user = User(username=username, created_at=func.now())
+    session.add(user)
+    await session.flush()
+    return user
+
+
+async def link_steam_account(session: AsyncSession, steam_id: int, user_id: int) -> None:
+    await session.execute(
+        update(SteamAccount)
+        .where(SteamAccount.steam_id == steam_id)
+        .values(user_id=user_id, linked_at=func.now())
+    )
+
+
+async def create_session(
+    session: AsyncSession, session_id: str, user_id: int, expires_at: datetime
+) -> None:
+    session.add(
+        Session(id=session_id, user_id=user_id, created_at=func.now(), expires_at=expires_at)
+    )
+
+
+async def get_session_user(session: AsyncSession, session_id: str) -> User | None:
+    result = await session.execute(
+        select(User)
+        .join(Session, Session.user_id == User.id)
+        .where(Session.id == session_id, Session.expires_at > func.now())
+    )
+    return result.scalar_one_or_none()
+
+
+async def delete_session(session: AsyncSession, session_id: str) -> None:
+    await session.execute(delete(Session).where(Session.id == session_id))
+
+
+async def get_steam_account_by_user(session: AsyncSession, user_id: int) -> SteamAccount | None:
+    result = await session.execute(
+        select(SteamAccount).where(SteamAccount.user_id == user_id)
+    )
+    return result.scalar_one_or_none()

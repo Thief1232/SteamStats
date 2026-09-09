@@ -57,3 +57,11 @@ class OwnedGame(Base):
     last_fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False
     )
+
+
+class Session(Base):
+    __tablename__ = "sessions"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
