@@ -1,0 +1,27 @@
+.suggestion-row {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 13.5px;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.suggestion-row:hover,
+.suggestion-row:focus-visible {
+  background: var(--fg);
+  color: var(--bg);
+  outline: none;
+}
+
+.suggestion-row:hover .dim,
+.suggestion-row:focus-visible .dim {
+  color: var(--bg);
+  opacity: 0.7;
+}

@@ -58,6 +58,33 @@ export async function getAchievementsProgress(steamId) {
   return request(`/api/users/${encodeURIComponent(steamId)}/library/achievements/progress`);
 }
 
+// app_id -> SteamSPY-style stats (online count, owners, review ratio) from the
+// separate steamspy-service, routed through nginx at /api/games/{app_id}.
+// Returns null both when the backend isn't wired up (mock mode) and when
+// SteamSPY simply has no data for that game (404) — the caller treats both the same.
+export async function getGameStats(appId) {
+  if (!API_BASE) return null;
+  try {
+    return await request(`/api/games/${encodeURIComponent(appId)}`);
+  } catch (err) {
+    if (err.status === 404) return null;
+    throw err;
+  }
+}
+
+// Global top-100-by-online-in-2-weeks list from steamspy-service, not tied to any profile.
+export async function getTopGames() {
+  if (!API_BASE) return [];
+  return request('/api/games/top');
+}
+
+// Resolves a free-text game name to app_id candidates (Steam's own store search,
+// not SteamSPY — SteamSPY has no search-by-name endpoint of its own).
+export async function searchGames(term) {
+  if (!API_BASE) return [];
+  return request(`/api/games/search?q=${encodeURIComponent(term)}`);
+}
+
 export async function logout() {
   if (!API_BASE) return;
   await request('/api/auth/logout', { method: 'POST' });

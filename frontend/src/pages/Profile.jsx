@@ -4,7 +4,13 @@ import TerminalWindow from '../components/TerminalWindow';
 import DotRow from '../components/DotRow';
 import MeterRow from '../components/MeterRow';
 import StatusBar from '../components/StatusBar';
-import { getUser, getUserLibrary, refreshLibraryAchievements, getAchievementsProgress } from '../api/client';
+import {
+  getUser,
+  getUserLibrary,
+  refreshLibraryAchievements,
+  getAchievementsProgress,
+  getGameStats,
+} from '../api/client';
 import { fmtHours, fmtInt, fmtPct, fmtNum, fmtDate } from '../lib/format';
 import './Profile.css';
 import './Placeholder.css';
@@ -36,6 +42,7 @@ export default function Profile() {
   const [achLoading, setAchLoading] = useState(false);
   const [achError, setAchError] = useState(false);
   const [achProgress, setAchProgress] = useState(null);
+  const [gameStats, setGameStats] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +51,7 @@ export default function Profile() {
     setAchLoading(false);
     setAchError(false);
     setAchProgress(null);
+    setGameStats({});
 
     getUser(lookup)
       .then((u) => {
@@ -63,6 +71,31 @@ export default function Profile() {
       cancelled = true;
     };
   }, [lookup]);
+
+  // Данные SteamSPY общие для всех игроков — грузим для топ-12 по времени в игре,
+  // не для всей библиотеки, чтобы не плодить лишние запросы к steamspy-service.
+  useEffect(() => {
+    if (!library || typeof library !== 'object') return;
+    let cancelled = false;
+
+    const topAppIds = [...library.games]
+      .sort((a, b) => b.playtime_minutes - a.playtime_minutes)
+      .slice(0, 12)
+      .map((g) => g.app_id);
+
+    Promise.allSettled(topAppIds.map((id) => getGameStats(id))).then((results) => {
+      if (cancelled) return;
+      const next = {};
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) next[topAppIds[i]] = r.value;
+      });
+      setGameStats(next);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [library]);
 
   async function handleLoadAchievements() {
     setAchLoading(true);
@@ -114,6 +147,19 @@ export default function Profile() {
 
     return { totalHours, topGames, maxMinutes, achievementGames, distribution, maxBucket, neverPlayed, recent, mostPlayed };
   }, [library]);
+
+  const communityGames = useMemo(() => {
+    if (!stats) return [];
+    const withStats = stats.topGames
+      .map((g) => ({ game: g, spy: gameStats[g.app_id] }))
+      // SteamSPY отдаёт валидную запись с обнулённой статистикой для игр, которые ещё
+      // не успел проиндексировать (обычно свежие релизы) — это не "0 онлайн", а "нет данных".
+      .filter((x) => x.spy && (x.spy.ccu > 0 || x.spy.positive > 0 || x.spy.negative > 0));
+    const maxCcu = Math.max(...withStats.map((x) => x.spy.ccu), 1);
+    return withStats
+      .map((x) => ({ ...x, ratio: x.spy.ccu / maxCcu }))
+      .sort((a, b) => b.spy.ccu - a.spy.ccu);
+  }, [stats, gameStats]);
 
   if (user === undefined) {
     return (
@@ -208,6 +254,24 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
               ))}
             </div>
           </TerminalWindow>
+
+          {communityGames.length > 0 && (
+            <TerminalWindow title="C:\STEAMSTATS\COMMUNITY.LOG" right={<span>STEAMSPY · {communityGames.length} ИГР</span>}>
+              <div className="list">
+                {communityGames.map(({ game, spy, ratio }) => {
+                  const rating = spy.positive + spy.negative > 0 ? (spy.positive / (spy.positive + spy.negative)) * 100 : null;
+                  return (
+                    <MeterRow
+                      key={game.app_id}
+                      name={game.name}
+                      ratio={ratio}
+                      value={`${fmtInt(spy.ccu)} онлайн${rating !== null ? ` · ${fmtPct(rating)}%` : ''}`}
+                    />
+                  );
+                })}
+              </div>
+            </TerminalWindow>
+          )}
 
           <TerminalWindow
             title="C:\STEAMSTATS\ACHIEVEMENTS.LOG"

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import (
 
 engine: AsyncEngine | None = None
 session_factory: async_sessionmaker[AsyncSession] | None = None
-
+ 
 
 def _database_url() -> str:
     return (

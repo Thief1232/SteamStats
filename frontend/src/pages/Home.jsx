@@ -99,6 +99,9 @@ export default function Home() {
             <span className="menu-cursor">&gt;</span> LOGIN_WITH_STEAM.EXE
           </button>
         )}
+        <button className="menu-item" onClick={() => navigate('/games')}>
+          <span className="menu-cursor">&gt;</span> TOP_ONLINE.EXE
+        </button>
         <button className="menu-item" onClick={() => setAbout((v) => !v)}>
           <span className="menu-cursor">&gt;</span> ABOUT.EXE
         </button>
