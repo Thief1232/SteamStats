@@ -6,6 +6,7 @@ from src.db.connection import get_session
 from src.schemas.schemas import AchievementsProgress, Library, UserProfile
 from src.services.library import (
     get_achievements_progress,
+    AchievementsRefreshInProgress,
     get_or_refresh_library,
     refresh_achievements,
 )
@@ -47,7 +48,10 @@ async def refresh_library_achievements(
         raise HTTPException(404)
     if account.visibility == "private":
         raise HTTPException(403)
-    await refresh_achievements(session, steam_id)
+    try:
+        await refresh_achievements(session, steam_id)
+    except AchievementsRefreshInProgress:
+        raise HTTPException(409, "Achievements refresh already in progress") from None
     rows = await queries.get_library(session, steam_id)
     return Library.from_rows(rows)
 

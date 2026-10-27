@@ -54,6 +54,9 @@ class OwnedGame(Base):
     last_played: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
     achievements_unlocked: Mapped[int | None] = mapped_column(Integer)
     achievements_total: Mapped[int | None] = mapped_column(Integer)
+    achievements_fetched_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True)
+    )
     last_fetched_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False
     )

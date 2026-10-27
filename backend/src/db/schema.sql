@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS owned_games (
     last_played TIMESTAMPTZ,
     achievements_unlocked INTEGER,
     achievements_total INTEGER,
+    achievements_fetched_at TIMESTAMPTZ,
     last_fetched_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (steam_id, app_id)
 );
@@ -54,3 +55,5 @@ CREATE TABLE IF NOT EXISTS sessions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL
 );
+-- Для БД, созданных до появления TTL на достижения.
+ALTER TABLE owned_games ADD COLUMN IF NOT EXISTS achievements_fetched_at TIMESTAMPTZ;

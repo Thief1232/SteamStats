@@ -10,7 +10,9 @@ from src.services.steam_client import extract_steam_id, verify_openid
 SESSION_TTL = timedelta(days=30)
 
 
-async def handle_callback(session: AsyncSession, params: dict) -> str | None:
+async def handle_callback(
+    session: AsyncSession, params: dict
+) -> tuple[str, int] | None:
     if not await verify_openid(params):
         return None
 

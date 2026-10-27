@@ -92,6 +92,17 @@ async def get_library(session: AsyncSession, steam_id: int) -> list:
     )
     return result.all()
 
+async def get_achievements_last_fetch(
+    session: AsyncSession, steam_id: int
+) -> datetime | None:
+    result = await session.execute(
+        select(func.max(OwnedGame.achievements_fetched_at)).where(
+            OwnedGame.steam_id == steam_id
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def get_owned_app_ids(session: AsyncSession, steam_id: int) -> list[int]:
     result = await session.execute(
         select(OwnedGame.app_id).where(OwnedGame.steam_id == steam_id)
@@ -108,6 +119,7 @@ async def update_achievements(session: AsyncSession, steam_id: int, rows: list[d
         .values(
             achievements_unlocked=bindparam("b_unlocked"),
             achievements_total=bindparam("b_total"),
+            achievements_fetched_at=func.now(),
         )
     )
     await session.execute(

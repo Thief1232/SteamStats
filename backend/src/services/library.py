@@ -14,6 +14,10 @@ ACHIEVEMENTS_CONCURRENCY = 10
 _achievements_progress: dict[int, tuple[int, int]] = {}
 
 
+class AchievementsRefreshInProgress(Exception):
+    pass
+
+
 def get_achievements_progress(steam_id: int) -> tuple[int, int] | None:
     return _achievements_progress.get(steam_id)
 
@@ -77,19 +81,33 @@ async def get_or_refresh_library(session: AsyncSession, steam_id: int) -> bool:
 
 
 async def refresh_achievements(session: AsyncSession, steam_id: int) -> None:
-    app_ids = await queries.get_owned_app_ids(session, steam_id)
-    total = len(app_ids)
-    _achievements_progress[steam_id] = (0, total)
+    """Тянет достижения из Steam, если данные в БД старше TTL.
 
-    sem = asyncio.Semaphore(ACHIEVEMENTS_CONCURRENCY)
-    tasks = [
-        asyncio.create_task(_fetch_achievements_limited(sem, steam_id, app_id))
-        for app_id in app_ids
-    ]
+    Бросает AchievementsRefreshInProgress, если для этого steam_id уже идёт обновление.
+    """
+    # Проверка и занятие слота идут без await между ними, поэтому гонки нет.
+    if steam_id in _achievements_progress:
+        raise AchievementsRefreshInProgress
+    _achievements_progress[steam_id] = (0, 0)
 
-    rows = []
-    done = 0
+    tasks: list[asyncio.Task] = []
     try:
+        last_fetched = await queries.get_achievements_last_fetch(session, steam_id)
+        if last_fetched is not None and not is_stale(last_fetched):
+            return
+
+        app_ids = await queries.get_owned_app_ids(session, steam_id)
+        total = len(app_ids)
+        _achievements_progress[steam_id] = (0, total)
+
+        sem = asyncio.Semaphore(ACHIEVEMENTS_CONCURRENCY)
+        tasks = [
+            asyncio.create_task(_fetch_achievements_limited(sem, steam_id, app_id))
+            for app_id in app_ids
+        ]
+
+        rows = []
+        done = 0
         for task in asyncio.as_completed(tasks):
             app_id, ach = await task
             done += 1
@@ -102,8 +120,10 @@ async def refresh_achievements(session: AsyncSession, steam_id: int) -> None:
                         "achievements_total": ach[1],
                     }
                 )
-    finally:
-        _achievements_progress.pop(steam_id, None)
 
-    await queries.update_achievements(session, steam_id, rows)
-    await session.commit()
+        await queries.update_achievements(session, steam_id, rows)
+        await session.commit()
+    finally:
+        for task in tasks:
+            task.cancel()
+        _achievements_progress.pop(steam_id, None)
