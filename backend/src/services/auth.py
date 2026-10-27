@@ -5,14 +5,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db import queries
 from src.services.profile import get_or_refresh_profile
-from src.services.steam_client import extract_steam_id, verify_openid
+from src.services.steam_client import (
+    extract_steam_id,
+    validate_openid_response,
+    verify_openid,
+)
 
 SESSION_TTL = timedelta(days=30)
 
 
 async def handle_callback(
-    session: AsyncSession, params: dict
+    session: AsyncSession, params: dict, return_to: str
 ) -> tuple[str, int] | None:
+    if not validate_openid_response(params, return_to):
+        return None
+
     if not await verify_openid(params):
         return None
 

@@ -15,16 +15,19 @@ router = APIRouter()
 SESSION_COOKIE = "session_id"
 
 
+def _callback_url() -> str:
+    return f"{os.environ['APP_URL']}/auth/steam/callback"
+
+
 @router.get("/auth/steam/login")
 async def steam_login():
-    app_url = os.environ["APP_URL"]
-    url = steam_login_url(f"{app_url}/auth/steam/callback", app_url)
+    url = steam_login_url(_callback_url(), os.environ["APP_URL"])
     return RedirectResponse(url)
 
 
 @router.get("/auth/steam/callback")
 async def steam_callback(request: Request, session: AsyncSession = Depends(get_session)):
-    result = await handle_callback(session, dict(request.query_params))
+    result = await handle_callback(session, dict(request.query_params), _callback_url())
     if result is None:
         raise HTTPException(400)
     session_id, steam_id = result
