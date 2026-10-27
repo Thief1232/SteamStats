@@ -47,7 +47,12 @@ async def fetch_owned_games(steam_id: int) -> list[dict] | None:
             },
         )
     resp.raise_for_status()
-    return resp.json()["response"].get("games")
+    data = resp.json()["response"]
+    # A private library comes back as an empty "response"; a public one with no
+    # games still carries game_count (0).
+    if "games" not in data:
+        return [] if "game_count" in data else None
+    return data["games"]
 
 
 async def fetch_achievements(steam_id: int, app_id: int) -> tuple[int, int] | None:

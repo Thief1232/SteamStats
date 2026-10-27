@@ -95,6 +95,21 @@ def test_fetch_owned_games_private_library_returns_none(mock_http):
     assert run(steam_client.fetch_owned_games(1)) is None
 
 
+def test_fetch_owned_games_empty_public_library_returns_empty_list(mock_http):
+    mock_http(lambda r: httpx.Response(200, json={"response": {"game_count": 0}}))
+
+    assert run(steam_client.fetch_owned_games(1)) == []
+
+
+def test_fetch_owned_games_returns_games(mock_http):
+    games = [{"appid": 440, "name": "Team Fortress 2"}]
+    mock_http(
+        lambda r: httpx.Response(200, json={"response": {"game_count": 1, "games": games}})
+    )
+
+    assert run(steam_client.fetch_owned_games(1)) == games
+
+
 def test_fetch_achievements_counts_unlocked(mock_http):
     mock_http(
         lambda r: httpx.Response(

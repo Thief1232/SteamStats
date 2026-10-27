@@ -34,6 +34,7 @@ const BUCKETS = [
 ];
 
 // undefined = loading, 'not_found' | 'private' | 'error' = failure state, object = loaded
+// library: undefined = loading, 'private' | 'empty' | 'error' = no stats to show, object = loaded
 export default function Profile() {
   const navigate = useNavigate();
   const { lookup } = useParams();
@@ -62,7 +63,7 @@ export default function Profile() {
           return;
         }
         getUserLibrary(u.steam_id)
-          .then((lib) => !cancelled && setLibrary(lib))
+          .then((lib) => !cancelled && setLibrary(lib.games.length > 0 ? lib : 'empty'))
           .catch((err) => !cancelled && setLibrary(err.status === 403 ? 'private' : 'error'));
       })
       .catch((err) => !cancelled && setUser(err.status === 404 ? 'not_found' : 'error'));
@@ -214,6 +215,14 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
         </div>
       )}
 
+      {library === 'empty' && (
+        <div className="dash-content">
+          <TerminalWindow title="C:\STEAMSTATS\LIBRARY.DAT">
+            <div className="dim">В библиотеке этого профиля нет игр.</div>
+          </TerminalWindow>
+        </div>
+      )}
+
       {library === 'error' && (
         <div className="dash-content">
           <TerminalWindow title="C:\STEAMSTATS\LIBRARY.DAT">
@@ -236,7 +245,11 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
               <DotRow label="Самая играемая" value={stats.mostPlayed.name} />
               <DotRow
                 label="Доля от общего времени"
-                value={`${fmtPct((stats.mostPlayed.playtime_minutes / library.total_playtime_minutes) * 100)}%`}
+                value={
+                  library.total_playtime_minutes > 0
+                    ? `${fmtPct((stats.mostPlayed.playtime_minutes / library.total_playtime_minutes) * 100)}%`
+                    : '—'
+                }
               />
             </div>
           </TerminalWindow>
