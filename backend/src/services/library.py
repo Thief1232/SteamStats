@@ -35,7 +35,7 @@ async def is_library_stale(session: AsyncSession, steam_id: int) -> bool:
 
 
 async def get_or_refresh_library(session: AsyncSession, steam_id: int) -> bool:
-    """Обновляет owned_games в БД, если кэш протух. False — если библиотека закрыта."""
+    """Refresh owned_games in the DB if the cache is stale. False if the library is private."""
     if not await is_library_stale(session, steam_id):
         return True
 
@@ -81,11 +81,11 @@ async def get_or_refresh_library(session: AsyncSession, steam_id: int) -> bool:
 
 
 async def refresh_achievements(session: AsyncSession, steam_id: int) -> None:
-    """Тянет достижения из Steam, если данные в БД старше TTL.
+    """Fetch achievements from Steam if the data in the DB is older than the TTL.
 
-    Бросает AchievementsRefreshInProgress, если для этого steam_id уже идёт обновление.
+    Raises AchievementsRefreshInProgress if a refresh for this steam_id is already running.
     """
-    # Проверка и занятие слота идут без await между ними, поэтому гонки нет.
+    # Checking and taking the slot has no await in between, so there is no race.
     if steam_id in _achievements_progress:
         raise AchievementsRefreshInProgress
     _achievements_progress[steam_id] = (0, 0)

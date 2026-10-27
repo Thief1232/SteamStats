@@ -32,7 +32,7 @@ export default function Home() {
     e.preventDefault();
     const lookup = parseLookup(query);
     if (!lookup) {
-      setError('Введите SteamID, vanity-имя или ссылку на профиль.');
+      setError('Enter a SteamID, vanity name or profile link.');
       return;
     }
     navigate(`/u/${encodeURIComponent(lookup)}`);
@@ -77,14 +77,14 @@ export default function Home() {
             setQuery(e.target.value);
             if (error) setError('');
           }}
-          placeholder="LOOKUP <steamid | vanity | ссылка на профиль>"
+          placeholder="LOOKUP <steamid | vanity | profile link>"
           autoFocus
           spellCheck={false}
         />
       </form>
       {error && <div className="quit-msg">{error}</div>}
 
-      <nav className="menu" aria-label="Главное меню">
+      <nav className="menu" aria-label="Main menu">
         {me ? (
           <>
             <button className="menu-item" onClick={() => navigate(`/u/${me.steam.steam_id}`)}>
@@ -114,19 +114,19 @@ export default function Home() {
         <pre className="about-box">
 {`STEAMSTATS.EXE
 ---------------
-Публичная аналитика библиотек Steam: время в играх,
-прогресс достижений и то, что пылится непройденным.
+Public analytics for Steam libraries: playtime,
+achievement progress and everything left unplayed.
 
-Смотреть чужую (или свою) статистику можно без входа —
-достаточно SteamID, vanity-имени или ссылки на профиль.
-Вход через Steam OpenID нужен только для удобства
-(быстрый переход на свой профиль); пароль от Steam здесь
-никогда не запрашивается и не хранится.`}
+Anyone's stats (yours included) can be viewed without
+signing in — a SteamID, vanity name or profile link is enough.
+Steam OpenID sign-in is only a convenience (a quick jump
+to your own profile); your Steam password is never
+requested or stored.`}
         </pre>
       )}
 
       {quitMsg && (
-        <div className="quit-msg">У вас недостаточно прав для выключения этой системы.</div>
+        <div className="quit-msg">You do not have permission to shut this system down.</div>
       )}
 
       <div className="login-cursor">

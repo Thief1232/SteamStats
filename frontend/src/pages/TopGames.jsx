@@ -46,7 +46,7 @@ export default function TopGames() {
     e.preventDefault();
     const term = query.trim();
     if (!term) {
-      setLookupError('Введите название игры или app_id.');
+      setLookupError('Enter a game name or app_id.');
       return;
     }
     setLookupError('');
@@ -88,7 +88,7 @@ export default function TopGames() {
                 setQuery(e.target.value);
                 if (lookupError) setLookupError('');
               }}
-              placeholder="LOOKUP <название игры или app_id>, например team fortress"
+              placeholder="LOOKUP <game name or app_id>, e.g. team fortress"
               spellCheck={false}
             />
           </form>
@@ -100,7 +100,7 @@ export default function TopGames() {
           )}
           {suggestions !== null && suggestions.length === 0 && (
             <div className="dim" style={{ marginTop: 10 }}>
-              Ничего не нашлось в Steam по такому названию.
+              Nothing found in Steam for that name.
             </div>
           )}
           {suggestions !== null && suggestions.length > 0 && (
@@ -114,17 +114,17 @@ export default function TopGames() {
           )}
           {lookup === 'loading' && (
             <div className="dim" style={{ marginTop: 10 }}>
-              ищу…
+              searching…
             </div>
           )}
           {lookup === 'not_found' && (
             <div className="dim" style={{ marginTop: 10 }}>
-              У SteamSPY нет данных по этой игре.
+              SteamSPY has no data for this game.
             </div>
           )}
           {lookup && typeof lookup === 'object' && lookup.ccu === 0 && ratingOf(lookup) === null && (
             <div className="dim" style={{ marginTop: 10 }}>
-              {lookup.name}: SteamSPY пока не собрал по этой игре статистику (обычно так у свежих релизов).
+              {lookup.name}: SteamSPY has not collected stats for this game yet (usually the case for fresh releases).
             </div>
           )}
           {lookup && typeof lookup === 'object' && (lookup.ccu > 0 || ratingOf(lookup) !== null) && (
@@ -132,19 +132,19 @@ export default function TopGames() {
               <MeterRow
                 name={lookup.name}
                 ratio={lookup.positive + lookup.negative > 0 ? lookup.positive / (lookup.positive + lookup.negative) : 0}
-                value={`${fmtInt(lookup.ccu)} онлайн${ratingOf(lookup) !== null ? ` · ${fmtPct(ratingOf(lookup))}%` : ''}`}
+                value={`${fmtInt(lookup.ccu)} online${ratingOf(lookup) !== null ? ` · ${fmtPct(ratingOf(lookup))}%` : ''}`}
               />
             </div>
           )}
         </TerminalWindow>
 
-        <TerminalWindow title="C:\STEAMSTATS\TOP_ONLINE.LOG" right={<span>STEAMSPY · ТОП {topGames.length}</span>}>
+        <TerminalWindow title="C:\STEAMSTATS\TOP_ONLINE.LOG" right={<span>STEAMSPY · TOP {topGames.length}</span>}>
           {games === undefined && (
             <div className="dim">
               LOADING TOP_ONLINE.LOG<span className="blink">_</span>
             </div>
           )}
-          {games === 'error' && <div className="dim">Не удалось загрузить список. Попробуйте позже.</div>}
+          {games === 'error' && <div className="dim">Could not load the list. Please try again later.</div>}
           {topGames.length > 0 && (
             <div className="list">
               {topGames.map((g, i) => (
@@ -153,7 +153,7 @@ export default function TopGames() {
                   rank={i + 1}
                   name={g.name}
                   ratio={g.ratio}
-                  value={`${fmtInt(g.ccu)} онлайн${g.rating !== null ? ` · ${fmtPct(g.rating)}%` : ''}`}
+                  value={`${fmtInt(g.ccu)} online${g.rating !== null ? ` · ${fmtPct(g.rating)}%` : ''}`}
                 />
               ))}
             </div>

@@ -1,5 +1,5 @@
--- Сгенерировано из frontend/src/data/me.json и library.json.
--- Безопасно перезапускать: ON CONFLICT обновляет существующие строки.
+-- Generated from frontend/src/data/me.json and library.json.
+-- Safe to re-run: ON CONFLICT updates existing rows.
 
 INSERT INTO steam_accounts (steam_id, persona_name, avatar_url, profile_url, account_created, visibility, linked_at, last_fetched_at)
 VALUES (
@@ -20,7 +20,7 @@ ON CONFLICT (steam_id) DO UPDATE SET
     linked_at = EXCLUDED.linked_at,
     last_fetched_at = now();
 
--- 114 игр из library.json
+-- 114 games from library.json
 INSERT INTO games (app_id, name, icon_url) VALUES
     (1172470, 'Apex Legends', 'https://media.steampowered.com/steamcommunity/public/images/apps/1172470/8986dd626da56db5f3fe09bc1b8871739de8b00d.jpg'),
     (730, 'Counter-Strike 2', 'https://media.steampowered.com/steamcommunity/public/images/apps/730/8dbc71957312bbd3baea65848b545be9eae2a355.jpg'),

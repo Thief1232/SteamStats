@@ -25,12 +25,12 @@ function pacmanBar(done, total) {
 }
 
 const BUCKETS = [
-  { label: '0 Ч (НИКОГДА)', test: (h) => h === 0 },
-  { label: '< 1 Ч', test: (h) => h > 0 && h < 1 },
-  { label: '1–10 Ч', test: (h) => h >= 1 && h < 10 },
-  { label: '10–50 Ч', test: (h) => h >= 10 && h < 50 },
-  { label: '50–100 Ч', test: (h) => h >= 50 && h < 100 },
-  { label: '100 Ч+', test: (h) => h >= 100 },
+  { label: '0 H (NEVER)', test: (h) => h === 0 },
+  { label: '< 1 H', test: (h) => h > 0 && h < 1 },
+  { label: '1–10 H', test: (h) => h >= 1 && h < 10 },
+  { label: '10–50 H', test: (h) => h >= 10 && h < 50 },
+  { label: '50–100 H', test: (h) => h >= 50 && h < 100 },
+  { label: '100 H+', test: (h) => h >= 100 },
 ];
 
 // undefined = loading, 'not_found' | 'private' | 'error' = failure state, object = loaded
@@ -73,8 +73,8 @@ export default function Profile() {
     };
   }, [lookup]);
 
-  // Данные SteamSPY общие для всех игроков — грузим для топ-12 по времени в игре,
-  // не для всей библиотеки, чтобы не плодить лишние запросы к steamspy-service.
+  // SteamSPY data is shared by all players — load it for the 12 most played games,
+  // not the whole library, to avoid piling up requests to steamspy-service.
   useEffect(() => {
     if (!library || typeof library !== 'object') return;
     let cancelled = false;
@@ -108,7 +108,7 @@ export default function Profile() {
         const p = await getAchievementsProgress(user.steam_id);
         if (p.total > 0) setAchProgress(p);
       } catch {
-        // прогресс не критичен — просто пропускаем тик
+        // progress is not critical — just skip this tick
       }
     }, 350);
 
@@ -153,8 +153,8 @@ export default function Profile() {
     if (!stats) return [];
     const withStats = stats.topGames
       .map((g) => ({ game: g, spy: gameStats[g.app_id] }))
-      // SteamSPY отдаёт валидную запись с обнулённой статистикой для игр, которые ещё
-      // не успел проиндексировать (обычно свежие релизы) — это не "0 онлайн", а "нет данных".
+      // SteamSPY returns a valid record with zeroed stats for games it has not indexed
+      // yet (usually fresh releases) — that means "no data", not "0 online".
       .filter((x) => x.spy && (x.spy.ccu > 0 || x.spy.positive > 0 || x.spy.negative > 0));
     const maxCcu = Math.max(...withStats.map((x) => x.spy.ccu), 1);
     return withStats
@@ -176,7 +176,7 @@ export default function Profile() {
         <pre className="soon-log">
 {`C:\\STEAMSTATS> LOOKUP ${lookup}
 
-${user === 'not_found' ? 'Профиль не найден.' : 'Не удалось получить данные. Попробуйте ещё раз.'}
+${user === 'not_found' ? 'Profile not found.' : 'Could not load the data. Please try again.'}
 `}
         </pre>
         <Link className="soon-back" to="/">
@@ -193,9 +193,9 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
         <div>
           <div className="dash-identity-name">{user.persona_name}</div>
           <div className="dim" style={{ fontSize: 12 }}>
-            на аккаунте с {fmtDate(user.account_created)} ·{' '}
+            member since {fmtDate(user.account_created)} ·{' '}
             <a href={user.profile_url} target="_blank" rel="noopener noreferrer">
-              профиль ↗
+              profile ↗
             </a>
           </div>
         </div>
@@ -210,7 +210,7 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
       {library === 'private' && (
         <div className="dash-content">
           <TerminalWindow title="C:\STEAMSTATS\LIBRARY.DAT">
-            <div className="dim">Библиотека этого профиля закрыта настройками приватности Steam.</div>
+            <div className="dim">This profile's library is hidden by Steam privacy settings.</div>
           </TerminalWindow>
         </div>
       )}
@@ -218,7 +218,7 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
       {library === 'empty' && (
         <div className="dash-content">
           <TerminalWindow title="C:\STEAMSTATS\LIBRARY.DAT">
-            <div className="dim">В библиотеке этого профиля нет игр.</div>
+            <div className="dim">This profile's library has no games.</div>
           </TerminalWindow>
         </div>
       )}
@@ -226,7 +226,7 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
       {library === 'error' && (
         <div className="dash-content">
           <TerminalWindow title="C:\STEAMSTATS\LIBRARY.DAT">
-            <div className="dim">Не удалось загрузить библиотеку. Попробуйте позже.</div>
+            <div className="dim">Could not load the library. Please try again later.</div>
           </TerminalWindow>
         </div>
       )}
@@ -238,13 +238,13 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
             right={<span>{library.total_games} GAMES SCANNED</span>}
           >
             <div className="hero-grid">
-              <DotRow label="Всего наиграно" value={`${fmtHours(library.total_playtime_minutes)} ч`} />
-              <DotRow label="≈ Суток без перерыва" value={fmtNum(stats.totalHours / 24)} />
-              <DotRow label="Игр в библиотеке" value={fmtInt(library.total_games)} />
-              <DotRow label="Запущено / не тронуто" value={`${fmtInt(library.played_count)} / ${fmtInt(library.never_played_count)}`} />
-              <DotRow label="Самая играемая" value={stats.mostPlayed.name} />
+              <DotRow label="Total playtime" value={`${fmtHours(library.total_playtime_minutes)} h`} />
+              <DotRow label="≈ Days nonstop" value={fmtNum(stats.totalHours / 24)} />
+              <DotRow label="Games in library" value={fmtInt(library.total_games)} />
+              <DotRow label="Played / never launched" value={`${fmtInt(library.played_count)} / ${fmtInt(library.never_played_count)}`} />
+              <DotRow label="Most played" value={stats.mostPlayed.name} />
               <DotRow
-                label="Доля от общего времени"
+                label="Share of total time"
                 value={
                   library.total_playtime_minutes > 0
                     ? `${fmtPct((stats.mostPlayed.playtime_minutes / library.total_playtime_minutes) * 100)}%`
@@ -254,7 +254,7 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
             </div>
           </TerminalWindow>
 
-          <TerminalWindow title="C:\STEAMSTATS\TOP_GAMES.LOG" right={<span>ТОП 12 / {library.total_games}</span>}>
+          <TerminalWindow title="C:\STEAMSTATS\TOP_GAMES.LOG" right={<span>TOP 12 / {library.total_games}</span>}>
             <div className="list">
               {stats.topGames.map((g, i) => (
                 <MeterRow
@@ -262,14 +262,14 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
                   rank={i + 1}
                   name={g.name}
                   ratio={g.playtime_minutes / stats.maxMinutes}
-                  value={`${fmtHours(g.playtime_minutes)} ч`}
+                  value={`${fmtHours(g.playtime_minutes)} h`}
                 />
               ))}
             </div>
           </TerminalWindow>
 
           {communityGames.length > 0 && (
-            <TerminalWindow title="C:\STEAMSTATS\COMMUNITY.LOG" right={<span>STEAMSPY · {communityGames.length} ИГР</span>}>
+            <TerminalWindow title="C:\STEAMSTATS\COMMUNITY.LOG" right={<span>STEAMSPY · {communityGames.length} GAMES</span>}>
               <div className="list">
                 {communityGames.map(({ game, spy, ratio }) => {
                   const rating = spy.positive + spy.negative > 0 ? (spy.positive / (spy.positive + spy.negative)) * 100 : null;
@@ -278,7 +278,7 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
                       key={game.app_id}
                       name={game.name}
                       ratio={ratio}
-                      value={`${fmtInt(spy.ccu)} онлайн${rating !== null ? ` · ${fmtPct(rating)}%` : ''}`}
+                      value={`${fmtInt(spy.ccu)} online${rating !== null ? ` · ${fmtPct(rating)}%` : ''}`}
                     />
                   );
                 })}
@@ -288,18 +288,18 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
 
           <TerminalWindow
             title="C:\STEAMSTATS\ACHIEVEMENTS.LOG"
-            right={stats.achievementGames.length > 0 && <span>{stats.achievementGames.length} ИГР СО СТАТИСТИКОЙ</span>}
+            right={stats.achievementGames.length > 0 && <span>{stats.achievementGames.length} GAMES WITH STATS</span>}
           >
             <button className="ach-load-btn" onClick={handleLoadAchievements} disabled={achLoading}>
               {achLoading
                 ? pacmanBar(achProgress?.done ?? 0, achProgress?.total ?? 0)
                 : stats.achievementGames.length > 0
-                  ? '> ОБНОВИТЬ ДОСТИЖЕНИЯ'
-                  : '> ЗАГРУЗИТЬ ДОСТИЖЕНИЯ'}
+                  ? '> REFRESH ACHIEVEMENTS'
+                  : '> LOAD ACHIEVEMENTS'}
             </button>
             {achError && (
               <div className="dim" style={{ marginTop: 12 }}>
-                Не удалось загрузить достижения. Попробуйте ещё раз.
+                Could not load achievements. Please try again.
               </div>
             )}
             {stats.achievementGames.length > 0 ? (
@@ -317,7 +317,7 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
               !achLoading &&
               !achError && (
                 <div className="dim" style={{ marginTop: 12 }}>
-                  Достижения не тянутся автоматически, чтобы не замедлять открытие профиля.
+                  Achievements are not loaded automatically so the profile opens faster.
                 </div>
               )
             )}
@@ -327,13 +327,13 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
             <TerminalWindow title="C:\STEAMSTATS\RECENT.LOG">
               {stats.recent ? (
                 <>
-                  <div className="recent-big mono-num">{fmtHours(stats.recent.playtime_2weeks_minutes)} ч</div>
+                  <div className="recent-big mono-num">{fmtHours(stats.recent.playtime_2weeks_minutes)} h</div>
                   <div className="dim" style={{ fontSize: 13 }}>
-                    в {stats.recent.name} за последние 14 дней
+                    in {stats.recent.name} over the last 14 days
                   </div>
                   <div style={{ marginTop: 14 }}>
                     <MeterRow
-                      name="ОТ ОКНА В 336Ч"
+                      name="OF 336H WINDOW"
                       ratio={stats.recent.playtime_2weeks_minutes / 60 / 336}
                       value={`${fmtPct((stats.recent.playtime_2weeks_minutes / 60 / 336) * 100)}%`}
                       meterWidth={16}
@@ -341,32 +341,27 @@ ${user === 'not_found' ? 'Профиль не найден.' : 'Не удало�
                   </div>
                 </>
               ) : (
-                <div className="dim">За последние 14 дней активности не зафиксировано.</div>
+                <div className="dim">No activity in the last 14 days.</div>
               )}
             </TerminalWindow>
 
             <TerminalWindow title="C:\STEAMSTATS\HISTOGRAM.LOG">
               <div className="list">
                 {stats.distribution.map((d) => (
-                  <MeterRow key={d.label} name={d.label} ratio={d.count / stats.maxBucket} value={`${d.count} игр`} meterWidth={14} />
+                  <MeterRow key={d.label} name={d.label} ratio={d.count / stats.maxBucket} value={`${d.count} games`} meterWidth={14} />
                 ))}
               </div>
             </TerminalWindow>
           </div>
 
-          <TerminalWindow title="C:\STEAMSTATS\NEVER_LAUNCHED.LOG" right={<span>{stats.neverPlayed.length} ИГР</span>}>
+          <TerminalWindow title="C:\STEAMSTATS\NEVER_LAUNCHED.LOG" right={<span>{stats.neverPlayed.length} GAMES</span>}>
             <div className="chips">
               {stats.neverPlayed.map((name) => (
-                <span key={name} className={`chip${name === 'Thief Simulator VR' ? ' chip-flag' : ''}`}>
+                <span key={name} className="chip">
                   [ {name} ]
                 </span>
               ))}
             </div>
-            {stats.neverPlayed.includes('Thief Simulator VR') && (
-              <div className="dim" style={{ marginTop: 12, fontSize: 12.5, fontStyle: 'italic' }}>
-                Thief Simulator VR: 0 ч. Ирония отмечена системой.
-              </div>
-            )}
           </TerminalWindow>
         </div>
       )}

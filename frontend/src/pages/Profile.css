@@ -92,10 +92,6 @@
   color: var(--fg-dim);
 }
 
-.chip-flag {
-  color: var(--fg);
-}
-
 .ach-load-btn {
   display: block;
   font-family: var(--mono);

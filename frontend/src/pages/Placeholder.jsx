@@ -18,7 +18,7 @@ export default function Placeholder() {
 {`C:\\STEAMSTATS> RUN ${name}
 
 Bad command or file name.
-Модуль ещё не скомпилирован оператором.
+Module not yet compiled by the operator.
 `}
       </pre>
       <Link className="soon-back" to="/">
