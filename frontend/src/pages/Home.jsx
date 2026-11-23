@@ -39,13 +39,9 @@ export default function Home() {
   }
 
   function handleLogin() {
+    // null only in fixture mode, where the fixture user is already signed in.
     const url = steamLoginUrl();
-    if (url) {
-      window.location.href = url;
-    } else {
-      // No backend wired up yet — drop straight into the fixture profile.
-      navigate('/u/76561199009068887');
-    }
+    if (url) window.location.href = url;
   }
 
   async function handleLogout() {

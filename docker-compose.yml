@@ -1,12 +1,18 @@
-# Shared base for every environment: services, networks, volumes.
-# Local development: `docker compose up` (docker-compose.override.yml is picked up automatically).
-# Server: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
+# Production config (what Dokploy deploys) and the base for local development.
+#
+# Server (Dokploy): Compose Path ./docker-compose.yml, variables in the Environment tab
+#   (Dokploy writes them to .env next to this file; see .env.example). Add the domain on
+#   service `caddy`, container port 80: Traefik terminates HTTPS, Caddy routes inside.
+# Locally: `docker compose up --build` also loads docker-compose.override.yml (dev
+#   additions) and reads variables from ./.env.
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: steam_stats
-    env_file:
-      - backend/.env
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${BACKEND_DB_USER:?see .env.example}
+      POSTGRES_PASSWORD: ${BACKEND_DB_PASSWORD:?see .env.example}
+      POSTGRES_DB: ${BACKEND_DB_NAME:?see .env.example}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Runs only when the volume is empty (first start).
@@ -19,9 +25,11 @@ services:
 
   steamspy_postgres:
     image: postgres:16-alpine
-    container_name: steamspy_db
-    env_file:
-      - steamspy-service/.env
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${STEAMSPY_DB_USER:?see .env.example}
+      POSTGRES_PASSWORD: ${STEAMSPY_DB_PASSWORD:?see .env.example}
+      POSTGRES_DB: ${STEAMSPY_DB_NAME:?see .env.example}
     volumes:
       - steamspy_postgres_data:/var/lib/postgresql/data
       - ./steamspy-service/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -33,39 +41,49 @@ services:
 
   backend:
     build: ./backend
-    container_name: backend
-    env_file:
-      - backend/.env
+    restart: unless-stopped
     environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
+      APP_URL: ${APP_URL:?see .env.example}
+      STEAM_API_KEY: ${STEAM_API_KEY:?see .env.example}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${BACKEND_DB_USER}
+      DB_PASSWORD: ${BACKEND_DB_PASSWORD}
+      DB_NAME: ${BACKEND_DB_NAME}
     depends_on:
       postgres:
         condition: service_healthy
 
   steamspy_service:
     build: ./steamspy-service
-    container_name: steamspy_service
-    env_file:
-      - steamspy-service/.env
+    restart: unless-stopped
     environment:
-      - DB_HOST=steamspy_postgres
-      - DB_PORT=5432
+      DB_HOST: steamspy_postgres
+      DB_PORT: "5432"
+      DB_USER: ${STEAMSPY_DB_USER}
+      DB_PASSWORD: ${STEAMSPY_DB_PASSWORD}
+      DB_NAME: ${STEAMSPY_DB_NAME}
     depends_on:
       steamspy_postgres:
         condition: service_healthy
 
   frontend:
-    build: ./frontend
-    container_name: frontend
+    build:
+      context: ./frontend
+      target: prod
+    restart: unless-stopped
 
   caddy:
     image: caddy:2.10-alpine
-    container_name: steamstats_caddy
+    restart: unless-stopped
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Explicit, so Caddy stays on the project network when Dokploy attaches its own
+    # network to this service for the domain.
+    networks: [default]
     depends_on:
       - backend
       - steamspy_service

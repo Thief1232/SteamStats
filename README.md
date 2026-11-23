@@ -15,25 +15,29 @@ independent of any profile.
   SteamSPY API: online players, owners, review ratio.
 - **`frontend/`** — React + Vite.
 - **`caddy/`** — reverse proxy that serves everything under a single address
-  (and handles HTTPS on the server).
+  (on the server, Dokploy's Traefik sits in front of it and handles HTTPS).
 
 ## Running
+
+All settings live in one `.env` next to `docker-compose.yml`; `.env.example`
+lists and explains every variable.
 
 Locally (code reloads on change, app at http://localhost:8000):
 
 ```sh
+cp .env.example .env   # then fill in
 docker compose up --build
 ```
 
-On a server (needs `SITE_ADDRESS` in `./.env`, see `.env.example`):
+`docker-compose.yml` is the production config; `docker-compose.override.yml`
+adds the dev bits (bind mounts, reload, local ports) and is loaded automatically
+by `docker compose up`.
 
-```sh
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-```
-
-`docker-compose.yml` holds what both share; `docker-compose.override.yml`
-(dev, loaded automatically) and `docker-compose.prod.yml` (server) add the rest.
-Database schemas are applied on the first start of an empty volume.
+On a server with [Dokploy](https://dokploy.com): create a Docker Compose app from
+this repository with Compose Path `./docker-compose.yml`, paste the variables from
+`.env.example` (with production values) into the Environment tab, and add the
+domain on service `caddy`, port 80, with HTTPS. Database schemas are applied on
+the first start of an empty volume.
 
 ## Stack
 

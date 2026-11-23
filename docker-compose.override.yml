@@ -1,18 +1,16 @@
-# Local development. Docker Compose loads this file automatically on `docker compose up`.
+# Local development only. `docker compose up` loads this file automatically on top of
+# docker-compose.yml; Dokploy passes -f docker-compose.yml explicitly, so it never sees it.
 # Code is bind-mounted and reloaded on change; ports are published on 127.0.0.1 only.
 services:
   postgres:
-    restart: unless-stopped
     ports:
       - "127.0.0.1:5555:5432"
 
   steamspy_postgres:
-    restart: unless-stopped
     ports:
       - "127.0.0.1:5433:5432"
 
   backend:
-    restart: unless-stopped
     command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
     volumes:
       - type: bind
@@ -24,7 +22,6 @@ services:
       - "127.0.0.1:8080:8080"
 
   steamspy_service:
-    restart: unless-stopped
     command: ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8081", "--reload"]
     volumes:
       - type: bind
@@ -36,12 +33,9 @@ services:
       - "127.0.0.1:8081:8081"
 
   frontend:
-    restart: unless-stopped
     build:
       context: ./frontend
       target: dev
-    env_file:
-      - frontend/.env
     volumes:
       - type: bind
         source: ./frontend
@@ -53,9 +47,7 @@ services:
       - "127.0.0.1:5173:5173"
 
   caddy:
-    restart: unless-stopped
     environment:
-      - SITE_ADDRESS=:8000
-      - FRONTEND_UPSTREAM=frontend:5173
+      FRONTEND_UPSTREAM: frontend:5173
     ports:
-      - "8000:8000"
+      - "8000:80"

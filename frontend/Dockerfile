@@ -9,9 +9,7 @@ COPY . .
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
 
 FROM deps AS build
-# Baked into the bundle at build time; empty means "use local fixtures".
-ARG VITE_API_BASE_URL
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+# No build-time settings: the bundle calls the API on its own origin.
 COPY . .
 RUN npm run build
 

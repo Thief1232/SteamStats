@@ -15,13 +15,22 @@ router = APIRouter()
 SESSION_COOKIE = "session_id"
 
 
+def _app_url() -> str:
+    return os.environ["APP_URL"].rstrip("/")
+
+
+def _frontend_url() -> str:
+    # Same origin as the API unless the frontend is served from somewhere else.
+    return os.environ.get("FRONTEND_URL", "").rstrip("/") or _app_url()
+
+
 def _callback_url() -> str:
-    return f"{os.environ['APP_URL']}/auth/steam/callback"
+    return f"{_app_url()}/auth/steam/callback"
 
 
 @router.get("/auth/steam/login")
 async def steam_login():
-    url = steam_login_url(_callback_url(), os.environ["APP_URL"])
+    url = steam_login_url(_callback_url(), _app_url())
     return RedirectResponse(url)
 
 
@@ -32,12 +41,13 @@ async def steam_callback(request: Request, session: AsyncSession = Depends(get_s
         raise HTTPException(400)
     session_id, steam_id = result
 
-    response = RedirectResponse(f"{os.environ['FRONTEND_URL']}/u/{steam_id}")
+    response = RedirectResponse(f"{_frontend_url()}/u/{steam_id}")
     response.set_cookie(
         SESSION_COOKIE,
         session_id,
         httponly=True,
-        secure=os.environ.get("NODE_ENV") == "production",
+        # The app itself sees plain HTTP behind the proxy, so go by the public URL.
+        secure=_app_url().startswith("https://"),
         samesite="lax",
         max_age=int(SESSION_TTL.total_seconds()),
     )
