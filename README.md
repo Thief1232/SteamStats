@@ -31,7 +31,11 @@ docker compose up --build
 
 `docker-compose.yml` is the production config; `docker-compose.override.yml`
 adds the dev bits (bind mounts, reload, local ports) and is loaded automatically
-by `docker compose up`.
+by `docker compose up`. The services read their settings from the environment
+compose passes them; they have no `.env` files of their own.
+
+Frontend only, without any backend: `cd frontend && VITE_USE_FIXTURES=true npm run dev`
+answers every API call from the fixtures in `src/data/`.
 
 On a server with [Dokploy](https://dokploy.com): create a Docker Compose app from
 this repository with Compose Path `./docker-compose.yml`, paste the variables from

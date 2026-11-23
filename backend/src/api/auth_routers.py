@@ -19,11 +19,6 @@ def _app_url() -> str:
     return os.environ["APP_URL"].rstrip("/")
 
 
-def _frontend_url() -> str:
-    # Same origin as the API unless the frontend is served from somewhere else.
-    return os.environ.get("FRONTEND_URL", "").rstrip("/") or _app_url()
-
-
 def _callback_url() -> str:
     return f"{_app_url()}/auth/steam/callback"
 
@@ -41,7 +36,8 @@ async def steam_callback(request: Request, session: AsyncSession = Depends(get_s
         raise HTTPException(400)
     session_id, steam_id = result
 
-    response = RedirectResponse(f"{_frontend_url()}/u/{steam_id}")
+    # Relative: the frontend is on the same origin as this callback.
+    response = RedirectResponse(f"/u/{steam_id}")
     response.set_cookie(
         SESSION_COOKIE,
         session_id,
