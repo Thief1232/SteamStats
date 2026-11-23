@@ -1,0 +1,23 @@
+# Reverse proxy in front of every service, in dev and on the server alike.
+# SITE_ADDRESS: ":8000" locally (plain HTTP); the domain on the server, for which
+# Caddy obtains and renews the HTTPS certificate by itself.
+# FRONTEND_UPSTREAM: the Vite dev server locally, the static build on the server.
+{$SITE_ADDRESS::8000} {
+	encode zstd gzip
+
+	handle /api/games/* {
+		reverse_proxy steamspy_service:8081
+	}
+
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	handle /auth/* {
+		reverse_proxy backend:8080
+	}
+
+	handle {
+		reverse_proxy {$FRONTEND_UPSTREAM:frontend:5173}
+	}
+}

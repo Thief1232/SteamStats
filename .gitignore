@@ -1,5 +1,6 @@
 /data/
 API_CONTRACT.md
 .vscode
+.env
 
 # file added so source control doesn't complain

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import TerminalWindow from '../components/TerminalWindow';
 import MeterRow from '../components/MeterRow';
 import StatusBar from '../components/StatusBar';
-import { getTopGames, getGameStats, searchGames } from '../api/client';
+import { getTopGames, searchGames } from '../api/client';
 import { fmtInt, fmtPct } from '../lib/format';
 import './Home.css';
 import './Profile.css';
@@ -16,12 +16,12 @@ function ratingOf(g) {
   return total > 0 ? (g.positive / total) * 100 : null;
 }
 
-// undefined = loading, 'loading' = lookup in flight, 'not_found', object = found
+// games: undefined = loading, 'error' = failed, array = loaded
 export default function TopGames() {
   const navigate = useNavigate();
   const [games, setGames] = useState(undefined);
   const [query, setQuery] = useState('');
-  const [lookup, setLookup] = useState(undefined);
+  const [searching, setSearching] = useState(false);
   const [lookupError, setLookupError] = useState('');
   const [suggestions, setSuggestions] = useState(null);
 
@@ -51,28 +51,20 @@ export default function TopGames() {
     }
     setLookupError('');
     setSuggestions(null);
-    setLookup(undefined);
 
     if (/^\d+$/.test(term)) {
-      setLookup('loading');
-      const data = await getGameStats(Number(term)).catch(() => null);
-      setLookup(data ?? 'not_found');
+      navigate(`/games/${term}`);
       return;
     }
 
+    setSearching(true);
     const results = await searchGames(term).catch(() => []);
+    setSearching(false);
     if (results.length === 1) {
-      handlePick(results[0].app_id);
+      navigate(`/games/${results[0].app_id}`);
     } else {
       setSuggestions(results);
     }
-  }
-
-  async function handlePick(appId) {
-    setSuggestions(null);
-    setLookup('loading');
-    const data = await getGameStats(appId).catch(() => null);
-    setLookup(data ?? 'not_found');
   }
 
   return (
@@ -106,34 +98,15 @@ export default function TopGames() {
           {suggestions !== null && suggestions.length > 0 && (
             <div className="list" style={{ marginTop: 10 }}>
               {suggestions.map((s) => (
-                <button key={s.app_id} className="suggestion-row" onClick={() => handlePick(s.app_id)}>
+                <button key={s.app_id} className="suggestion-row" onClick={() => navigate(`/games/${s.app_id}`)}>
                   {s.name} <span className="dim">· {s.app_id}</span>
                 </button>
               ))}
             </div>
           )}
-          {lookup === 'loading' && (
+          {searching && (
             <div className="dim" style={{ marginTop: 10 }}>
               searching…
-            </div>
-          )}
-          {lookup === 'not_found' && (
-            <div className="dim" style={{ marginTop: 10 }}>
-              SteamSPY has no data for this game.
-            </div>
-          )}
-          {lookup && typeof lookup === 'object' && lookup.ccu === 0 && ratingOf(lookup) === null && (
-            <div className="dim" style={{ marginTop: 10 }}>
-              {lookup.name}: SteamSPY has not collected stats for this game yet (usually the case for fresh releases).
-            </div>
-          )}
-          {lookup && typeof lookup === 'object' && (lookup.ccu > 0 || ratingOf(lookup) !== null) && (
-            <div className="list" style={{ marginTop: 10 }}>
-              <MeterRow
-                name={lookup.name}
-                ratio={lookup.positive + lookup.negative > 0 ? lookup.positive / (lookup.positive + lookup.negative) : 0}
-                value={`${fmtInt(lookup.ccu)} online${ratingOf(lookup) !== null ? ` · ${fmtPct(ratingOf(lookup))}%` : ''}`}
-              />
             </div>
           )}
         </TerminalWindow>
@@ -148,13 +121,14 @@ export default function TopGames() {
           {topGames.length > 0 && (
             <div className="list">
               {topGames.map((g, i) => (
-                <MeterRow
-                  key={g.app_id}
-                  rank={i + 1}
-                  name={g.name}
-                  ratio={g.ratio}
-                  value={`${fmtInt(g.ccu)} online${g.rating !== null ? ` · ${fmtPct(g.rating)}%` : ''}`}
-                />
+                <Link key={g.app_id} className="row-link" to={`/games/${g.app_id}`}>
+                  <MeterRow
+                    rank={i + 1}
+                    name={g.name}
+                    ratio={g.ratio}
+                    value={`${fmtInt(g.ccu)} online${g.rating !== null ? ` · ${fmtPct(g.rating)}%` : ''}`}
+                  />
+                </Link>
               ))}
             </div>
           )}

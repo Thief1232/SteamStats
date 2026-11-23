@@ -1,95 +1,71 @@
+# Shared base for every environment: services, networks, volumes.
+# Local development: `docker compose up` (docker-compose.override.yml is picked up automatically).
+# Server: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
 services:
   postgres:
     image: postgres:16-alpine
     container_name: steam_stats
-    restart: always
     env_file:
       - backend/.env
-    ports:
-      - "5555:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Runs only when the volume is empty (first start).
+      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   steamspy_postgres:
     image: postgres:16-alpine
     container_name: steamspy_db
-    restart: always
     env_file:
       - steamspy-service/.env
-    ports:
-      - "5433:5432"
     volumes:
       - steamspy_postgres_data:/var/lib/postgresql/data
+      - ./steamspy-service/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   backend:
     build: ./backend
     container_name: backend
-    restart: always
     env_file:
       - backend/.env
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-    volumes:
-      - type: bind
-        source: ./backend
-        target: /app
-        bind:
-          create_host_path: false
     depends_on:
-      - postgres
-    ports:
-      - "8080:8080"
+      postgres:
+        condition: service_healthy
 
   steamspy_service:
     build: ./steamspy-service
     container_name: steamspy_service
-    restart: always
     env_file:
       - steamspy-service/.env
     environment:
       - DB_HOST=steamspy_postgres
       - DB_PORT=5432
-    volumes:
-      - type: bind
-        source: ./steamspy-service
-        target: /app
-        bind:
-          create_host_path: false
     depends_on:
-      - steamspy_postgres
-    ports:
-      - "8081:8081"
+      steamspy_postgres:
+        condition: service_healthy
 
   frontend:
     build: ./frontend
     container_name: frontend
-    restart: always
-    env_file:
-      - frontend/.env
-    volumes:
-      - type: bind
-        source: ./frontend
-        target: /app
-        bind:
-          create_host_path: false
-      - frontend_node_modules:/app/node_modules
-    ports:
-      - "5173:5173"
 
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: steamstats_nginx
-    restart: always
+  caddy:
+    image: caddy:2.10-alpine
+    container_name: steamstats_caddy
     volumes:
-      - type: bind
-        source: ./nginx/nginx.conf
-        target: /etc/nginx/nginx.conf
-        read_only: true
-        bind:
-          create_host_path: false
-    ports:
-      - "8000:8000"
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - backend
       - steamspy_service
@@ -97,8 +73,7 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
   steamspy_postgres_data:
-    driver: local
   frontend_node_modules:
-    driver: local
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,8 @@
+# Serves the production build inside the frontend container (prod target only).
+# Unknown paths fall back to index.html so React Router can handle /u/..., /games, etc.
+:80 {
+	root * /srv
+	encode zstd gzip
+	try_files {path} /index.html
+	file_server
+}

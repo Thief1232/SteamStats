@@ -1,0 +1,36 @@
+# Server. Run with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Needs SITE_ADDRESS (the domain, e.g. steamstats.example.com) in ./.env, see .env.example.
+# Nothing publishes ports: the server's shared front proxy (the external `web` network)
+# terminates HTTPS for SITE_ADDRESS and forwards to steamstats_caddy:80, which routes inside.
+services:
+  postgres:
+    restart: unless-stopped
+
+  steamspy_postgres:
+    restart: unless-stopped
+
+  backend:
+    restart: unless-stopped
+
+  steamspy_service:
+    restart: unless-stopped
+
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        VITE_API_BASE_URL: https://${SITE_ADDRESS:?set SITE_ADDRESS in .env}
+
+  caddy:
+    restart: unless-stopped
+    environment:
+      - SITE_ADDRESS=:80
+      - FRONTEND_UPSTREAM=frontend:80
+    networks: [default, web]
+
+networks:
+  web:
+    external: true
