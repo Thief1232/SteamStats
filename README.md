@@ -7,6 +7,8 @@ achievements — by SteamID64 or vanity name, no sign-in required. It also has
 a global top of games by online players and per-game stats lookup (SteamSPY),
 independent of any profile.
 
+**Live:** https://steam.thief.beer
+
 ## Components
 
 - **`backend/`** — FastAPI + PostgreSQL. Profiles and libraries from the Steam
