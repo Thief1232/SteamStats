@@ -4,6 +4,7 @@ import TerminalWindow from '../components/TerminalWindow';
 import DotRow from '../components/DotRow';
 import MeterRow from '../components/MeterRow';
 import StatusBar from '../components/StatusBar';
+import SteamLink from '../components/SteamLink';
 import {
   getUser,
   getUserLibrary,
@@ -13,7 +14,7 @@ import {
 } from '../api/client';
 import { fmtHours, fmtInt, fmtPct, fmtNum, fmtDate } from '../lib/format';
 import './Profile.css';
-import './Placeholder.css';
+import './Notice.css';
 
 const PACMAN_WIDTH = 24;
 
@@ -193,10 +194,8 @@ ${user === 'not_found' ? 'Profile not found.' : 'Could not load the data. Please
         <div>
           <div className="dash-identity-name">{user.persona_name}</div>
           <div className="dim" style={{ fontSize: 12 }}>
-            member since {fmtDate(user.account_created)} ·{' '}
-            <a href={user.profile_url} target="_blank" rel="noopener noreferrer">
-              profile ↗
-            </a>
+            member since {fmtDate(user.account_created)}{' '}
+            <SteamLink href={user.profile_url} label="Steam profile" />
           </div>
         </div>
       </div>
@@ -366,15 +365,7 @@ ${user === 'not_found' ? 'Profile not found.' : 'Could not load the data. Please
         </div>
       )}
 
-      <StatusBar
-        items={[
-          { key: 'F1', label: 'HELP', onClick: () => navigate('/soon/help') },
-          { key: 'F2', label: 'WRAPPED', onClick: () => navigate('/soon/wrapped') },
-          { key: 'F3', label: 'LEADERBOARD', onClick: () => navigate('/soon/leaderboard') },
-          { key: 'F4', label: 'WISHLIST', onClick: () => navigate('/soon/wishlist') },
-          { key: 'F9', label: 'HOME', onClick: () => navigate('/') },
-        ]}
-      />
+      <StatusBar items={[{ key: 'F9', label: 'HOME', onClick: () => navigate('/') }]} />
     </div>
   );
 }

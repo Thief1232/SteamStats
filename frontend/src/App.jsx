@@ -3,7 +3,6 @@ import Home from './pages/Home';
 import Profile from './pages/Profile';
 import TopGames from './pages/TopGames';
 import GameStats from './pages/GameStats';
-import Placeholder from './pages/Placeholder';
 
 export default function App() {
   return (
@@ -13,7 +12,6 @@ export default function App() {
         <Route path="/u/:lookup" element={<Profile />} />
         <Route path="/games" element={<TopGames />} />
         <Route path="/games/:appId" element={<GameStats />} />
-        <Route path="/soon/:feature" element={<Placeholder />} />
       </Routes>
     </BrowserRouter>
   );

@@ -61,7 +61,7 @@ export default function Home() {
 
       <h1 className="login-banner">STEAMSTATS OS</h1>
       <div className="login-sub dim">
-        v0.1.0 — personal build{isMocked ? ' · NO BACKEND LINKED (fixture data)' : ''}
+        v0.1.0 — public build{isMocked ? ' · NO BACKEND LINKED (fixture data)' : ''}
       </div>
 
       <form className="lookup-form" onSubmit={handleSearch}>

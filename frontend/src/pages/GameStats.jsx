@@ -4,10 +4,11 @@ import TerminalWindow from '../components/TerminalWindow';
 import DotRow from '../components/DotRow';
 import MeterRow from '../components/MeterRow';
 import StatusBar from '../components/StatusBar';
+import SteamLink from '../components/SteamLink';
 import { getGameStats } from '../api/client';
 import { fmtHours, fmtInt, fmtPct } from '../lib/format';
 import './Profile.css';
-import './Placeholder.css';
+import './Notice.css';
 
 const dash = (n, format = fmtInt) => (n == null ? '—' : format(n));
 // SteamSPY reports 0 playtime for games it has no playtime data for.
@@ -72,14 +73,11 @@ ${result === 'not_found' ? 'SteamSPY has no data for this game.' : 'Could not lo
         <div>
           <div className="dash-identity-name">{game.name}</div>
           <div className="dim" style={{ fontSize: 12 }}>
-            app_id {game.app_id} ·{' '}
-            <a
+            app_id {game.app_id}{' '}
+            <SteamLink
               href={`https://store.steampowered.com/app/${game.app_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              store page ↗
-            </a>
+              label="Steam store page"
+            />
           </div>
         </div>
       </div>
