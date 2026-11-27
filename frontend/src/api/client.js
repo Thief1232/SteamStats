@@ -23,7 +23,7 @@ async function request(path, options) {
 }
 
 // undefined = still checking, null = signed out, object = signed in.
-// Auth is optional site-wide — this is only used to offer a "my profile" shortcut.
+// Browsing needs no sign-in; it is required only to load achievements (Steam API quota).
 export async function getMe() {
   if (USE_FIXTURES) return mockMe();
   try {
@@ -46,9 +46,10 @@ export async function getUserLibrary(steamId) {
   return request(`/api/users/${encodeURIComponent(steamId)}/library`);
 }
 
-// Fetches achievement counts for every owned game and returns the updated library.
-// Separate from getUserLibrary because it's slow (one Steam API call per game) — triggered
-// on demand by a button rather than on every profile load.
+// Fetches achievement counts for the games played since they were last checked and
+// returns the updated library. Separate from getUserLibrary because it's slow (one Steam
+// API call per game) — triggered on demand by a button. Needs sign-in: throws with
+// .status 401 for guests.
 export async function refreshLibraryAchievements(steamId) {
   if (USE_FIXTURES) return mockLibrary();
   return request(`/api/users/${encodeURIComponent(steamId)}/library/achievements`, { method: 'POST' });
@@ -92,8 +93,11 @@ export async function logout() {
   await request('/api/auth/logout', { method: 'POST' });
 }
 
-export function steamLoginUrl() {
-  return USE_FIXTURES ? null : `${API_BASE}/auth/steam/login`;
+// next — a path on this site to come back to after signing in (default: own profile).
+export function steamLoginUrl(next) {
+  if (USE_FIXTURES) return null;
+  const query = next ? `?next=${encodeURIComponent(next)}` : '';
+  return `${API_BASE}/auth/steam/login${query}`;
 }
 
 export const isMocked = USE_FIXTURES;

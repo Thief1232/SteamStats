@@ -3,7 +3,8 @@
 ![CI](https://github.com/Thief1232/SteamStats/actions/workflows/ci.yml/badge.svg)
 
 A web app for browsing Steam profile statistics: games, playtime and
-achievements — by SteamID64 or vanity name, no sign-in required. It also has
+achievements — by SteamID64 or vanity name, no sign-in required (signing in
+through Steam is needed only to load achievements, which costs Steam API calls). It also has
 a global top of games by online players and per-game stats lookup (SteamSPY),
 independent of any profile.
 

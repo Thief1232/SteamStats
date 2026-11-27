@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, Link } from 'react-router-dom';
 import TerminalWindow from '../components/TerminalWindow';
 import DotRow from '../components/DotRow';
 import MeterRow from '../components/MeterRow';
@@ -11,7 +11,9 @@ import {
   refreshLibraryAchievements,
   getAchievementsProgress,
   getGameStats,
+  steamLoginUrl,
 } from '../api/client';
+import { useAuth } from '../hooks/useAuth';
 import { fmtHours, fmtInt, fmtPct, fmtNum, fmtDate } from '../lib/format';
 import './Profile.css';
 import './Notice.css';
@@ -38,12 +40,17 @@ const BUCKETS = [
 // library: undefined = loading, 'private' | 'empty' | 'error' = no stats to show, object = loaded
 export default function Profile() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { lookup } = useParams();
+  const me = useAuth();
   const [user, setUser] = useState(undefined);
   const [library, setLibrary] = useState(undefined);
   const [achLoading, setAchLoading] = useState(false);
   const [achError, setAchError] = useState(false);
   const [achProgress, setAchProgress] = useState(null);
+  // Loading achievements costs Steam API quota, so the server allows it only when signed in.
+  const [achNeedsSignIn, setAchNeedsSignIn] = useState(false);
+  const signedOut = me === null || achNeedsSignIn;
   const [gameStats, setGameStats] = useState({});
 
   useEffect(() => {
@@ -99,6 +106,12 @@ export default function Profile() {
     };
   }, [library]);
 
+  function handleSignInForAchievements() {
+    // Come back to this profile, not to the visitor's own one.
+    const url = steamLoginUrl(location.pathname);
+    if (url) window.location.href = url;
+  }
+
   async function handleLoadAchievements() {
     setAchLoading(true);
     setAchError(false);
@@ -116,8 +129,10 @@ export default function Profile() {
     try {
       const lib = await refreshLibraryAchievements(user.steam_id);
       setLibrary(lib);
-    } catch {
-      setAchError(true);
+    } catch (err) {
+      // 401: the session expired since the page loaded.
+      if (err.status === 401) setAchNeedsSignIn(true);
+      else setAchError(true);
     } finally {
       clearInterval(poll);
       setAchLoading(false);
@@ -289,13 +304,27 @@ ${user === 'not_found' ? 'Profile not found.' : 'Could not load the data. Please
             title="C:\STEAMSTATS\ACHIEVEMENTS.LOG"
             right={stats.achievementGames.length > 0 && <span>{stats.achievementGames.length} GAMES WITH STATS</span>}
           >
-            <button className="ach-load-btn" onClick={handleLoadAchievements} disabled={achLoading}>
-              {achLoading
-                ? pacmanBar(achProgress?.done ?? 0, achProgress?.total ?? 0)
-                : stats.achievementGames.length > 0
-                  ? '> REFRESH ACHIEVEMENTS'
-                  : '> LOAD ACHIEVEMENTS'}
-            </button>
+            {signedOut ? (
+              <>
+                <button className="ach-load-btn" onClick={handleSignInForAchievements}>
+                  {stats.achievementGames.length > 0
+                    ? '> SIGN IN WITH STEAM TO REFRESH'
+                    : '> SIGN IN WITH STEAM TO LOAD'}
+                </button>
+                <div className="dim" style={{ marginTop: 12 }}>
+                  Loading achievements asks Steam about every game, so it needs a Steam sign-in.
+                  Achievements loaded once are visible to everyone.
+                </div>
+              </>
+            ) : (
+              <button className="ach-load-btn" onClick={handleLoadAchievements} disabled={achLoading}>
+                {achLoading
+                  ? pacmanBar(achProgress?.done ?? 0, achProgress?.total ?? 0)
+                  : stats.achievementGames.length > 0
+                    ? '> REFRESH ACHIEVEMENTS'
+                    : '> LOAD ACHIEVEMENTS'}
+              </button>
+            )}
             {achError && (
               <div className="dim" style={{ marginTop: 12 }}>
                 Could not load achievements. Please try again.
@@ -314,7 +343,8 @@ ${user === 'not_found' ? 'Profile not found.' : 'Could not load the data. Please
               </div>
             ) : (
               !achLoading &&
-              !achError && (
+              !achError &&
+              !signedOut && (
                 <div className="dim" style={{ marginTop: 12 }}>
                   Achievements are not loaded automatically so the profile opens faster.
                 </div>

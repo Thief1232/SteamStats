@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.deps import current_user
 from src.db import queries
 from src.db.connection import get_session
+from src.db.models import User
 from src.schemas.schemas import AchievementsProgress, Library, UserProfile
 from src.services.library import (
     get_achievements_progress,
@@ -11,6 +15,8 @@ from src.services.library import (
     refresh_achievements,
 )
 from src.services.profile import get_or_refresh_profile
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -39,15 +45,20 @@ async def get_library(steam_id: int, session: AsyncSession = Depends(get_session
     return Library.from_rows(rows)
 
 
+# Costs up to one Steam API call per game, so only signed-in users may start it
+# (any of them, for any public profile). Reading stored achievements needs no sign-in.
 @router.post("/api/users/{steam_id}/library/achievements", response_model=Library)
 async def refresh_library_achievements(
-    steam_id: int, session: AsyncSession = Depends(get_session)
+    steam_id: int,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
 ):
     account = await queries.get_steam_account(session, steam_id)
     if account is None:
         raise HTTPException(404)
     if account.visibility == "private":
         raise HTTPException(403)
+    log.info("achievements refresh of %s requested by user %s", steam_id, user.id)
     try:
         await refresh_achievements(session, steam_id)
     except AchievementsRefreshInProgress:

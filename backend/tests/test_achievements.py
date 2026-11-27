@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from src.api import routers
+from src.api.deps import current_user
 from src.db.connection import get_session
 from src.services import library
 from src.services.steam_client import SteamApiError, SteamRateLimited
@@ -275,6 +276,10 @@ class FakeAccount:
     visibility = "public"
 
 
+class FakeUser:
+    id = 1
+
+
 @pytest.fixture
 def client(monkeypatch):
     app = FastAPI()
@@ -284,6 +289,7 @@ def client(monkeypatch):
         yield FakeSession()
 
     app.dependency_overrides[get_session] = fake_session
+    app.dependency_overrides[current_user] = lambda: FakeUser()
 
     async def fake_account(session, steam_id):
         return FakeAccount() if steam_id == STEAM_ID else None
@@ -345,3 +351,30 @@ def test_progress_endpoint_reports_running_refresh(client):
     library._achievements_progress[STEAM_ID] = (3, 10)
 
     assert client.get(f"{URL}/progress").json() == {"done": 3, "total": 10}
+
+
+def test_post_requires_sign_in(monkeypatch):
+    # No current_user override here: the real dependency runs and finds no cookie.
+    app = FastAPI()
+    app.include_router(routers.router)
+
+    async def fake_session():
+        yield FakeSession()
+
+    app.dependency_overrides[get_session] = fake_session
+    called = []
+
+    async def refresh(session, steam_id):
+        called.append(steam_id)
+
+    monkeypatch.setattr(routers, "refresh_achievements", refresh)
+
+    assert TestClient(app).post(URL).status_code == 401
+    assert called == []
+
+
+def test_progress_endpoint_needs_no_sign_in(monkeypatch):
+    app = FastAPI()
+    app.include_router(routers.router)
+
+    assert TestClient(app).get(f"{URL}/progress").status_code == 200
