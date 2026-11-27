@@ -3,9 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.connection import get_session
 from src.schemas.schemas import GameSearchResult, GameStatsResponse
-from src.services.stats import get_or_refresh_stats, parse_owners
+from src.services.stats import get_or_refresh_stats, get_top_games, parse_owners
 from src.services.steam_search import search_games
-from src.services.steamspy_client import fetch_top_games
 
 router = APIRouter()
 
@@ -18,8 +17,8 @@ async def search_games_route(q: str):
 
 
 @router.get("/api/games/top", response_model=list[GameStatsResponse])
-async def get_top_games():
-    games = await fetch_top_games()
+async def get_top_games_route():
+    games = await get_top_games()
     result = []
     for g in games:
         owners_min, owners_max = parse_owners(g["owners"])

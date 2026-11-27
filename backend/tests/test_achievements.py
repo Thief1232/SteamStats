@@ -1,5 +1,4 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import FastAPI
@@ -8,7 +7,7 @@ from fastapi.testclient import TestClient
 from src.api import routers
 from src.db.connection import get_session
 from src.services import library
-from src.services.cache import TTL
+from src.services.steam_client import SteamApiError, SteamRateLimited
 
 STEAM_ID = 76561197960287930
 
@@ -28,15 +27,11 @@ class FakeSession:
 class FakeDb:
     """Stands in for src.db.queries: only what refresh_achievements touches."""
 
-    def __init__(self, app_ids, last_fetch=None):
-        self.app_ids = app_ids
-        self.last_fetch = last_fetch
+    def __init__(self, app_ids):
+        self.app_ids = app_ids  # what get_app_ids_needing_achievements returns
         self.updates: list[list[dict]] = []
 
-    async def get_achievements_last_fetch(self, session, steam_id):
-        return self.last_fetch
-
-    async def get_owned_app_ids(self, session, steam_id):
+    async def get_app_ids_needing_achievements(self, session, steam_id):
         return self.app_ids
 
     async def update_achievements(self, session, steam_id, rows):
@@ -46,8 +41,9 @@ class FakeDb:
 @pytest.fixture
 def db(monkeypatch):
     fake = FakeDb(app_ids=[10, 20, 30])
-    monkeypatch.setattr(library.queries, "get_achievements_last_fetch", fake.get_achievements_last_fetch)
-    monkeypatch.setattr(library.queries, "get_owned_app_ids", fake.get_owned_app_ids)
+    monkeypatch.setattr(
+        library.queries, "get_app_ids_needing_achievements", fake.get_app_ids_needing_achievements
+    )
     monkeypatch.setattr(library.queries, "update_achievements", fake.update_achievements)
     return fake
 
@@ -74,11 +70,15 @@ def patch_steam(monkeypatch, results):
     return calls
 
 
-# --- TTL -----------------------------------------------------------------------
+def by_app(rows):
+    return sorted(rows, key=lambda r: r["app_id"])
 
 
-def test_fresh_data_does_not_hit_steam(db, monkeypatch):
-    db.last_fetch = datetime.now(timezone.utc) - TTL + timedelta(minutes=1)
+# --- which games are asked about -------------------------------------------------
+
+
+def test_nothing_to_check_does_not_hit_steam(db, monkeypatch):
+    db.app_ids = []
     calls = patch_steam(monkeypatch, {})
     session = FakeSession()
 
@@ -90,41 +90,70 @@ def test_fresh_data_does_not_hit_steam(db, monkeypatch):
     assert STEAM_ID not in library._achievements_progress
 
 
-def test_stale_data_is_refetched(db, monkeypatch):
-    db.last_fetch = datetime.now(timezone.utc) - TTL - timedelta(minutes=1)
-    calls = patch_steam(monkeypatch, {10: (1, 2), 20: (0, 5), 30: (4, 4)})
-    session = FakeSession()
-
-    run(library.refresh_achievements(session, STEAM_ID))
-
-    assert sorted(calls) == [10, 20, 30]
-    assert session.commits == 1
-
-
-def test_never_fetched_is_refetched(db, monkeypatch):
-    db.last_fetch = None
-    calls = patch_steam(monkeypatch, {10: (1, 2), 20: (0, 5), 30: (4, 4)})
+def test_only_games_that_need_it_are_fetched(db, monkeypatch):
+    db.app_ids = [20]
+    calls = patch_steam(monkeypatch, {20: (1, 2)})
 
     run(library.refresh_achievements(FakeSession(), STEAM_ID))
 
-    assert sorted(calls) == [10, 20, 30]
+    assert calls == [20]
 
 
 # --- results -------------------------------------------------------------------
 
 
-def test_rows_are_written_and_failed_games_skipped(db, monkeypatch):
-    # None = game without achievements or a transient Steam error. Writing it would
-    # overwrite previously stored counts, so such games must be left alone.
+def test_counts_are_written(db, monkeypatch):
+    patch_steam(monkeypatch, {10: (1, 2), 20: (0, 5), 30: (4, 4)})
+    session = FakeSession()
+
+    run(library.refresh_achievements(session, STEAM_ID))
+
+    (rows,) = db.updates
+    assert by_app(rows) == [
+        {"app_id": 10, "achievements_unlocked": 1, "achievements_total": 2},
+        {"app_id": 20, "achievements_unlocked": 0, "achievements_total": 5},
+        {"app_id": 30, "achievements_unlocked": 4, "achievements_total": 4},
+    ]
+    assert session.commits == 1
+
+
+def test_game_without_achievements_is_marked_checked(db, monkeypatch):
+    # None counts tell update_achievements to mark the game as checked (so it is not
+    # asked about again until played) without touching counts stored earlier.
     patch_steam(monkeypatch, {10: (1, 2), 20: None, 30: (4, 4)})
 
     run(library.refresh_achievements(FakeSession(), STEAM_ID))
 
     (rows,) = db.updates
-    assert sorted(rows, key=lambda r: r["app_id"]) == [
-        {"app_id": 10, "achievements_unlocked": 1, "achievements_total": 2},
-        {"app_id": 30, "achievements_unlocked": 4, "achievements_total": 4},
-    ]
+    assert {"app_id": 20, "achievements_unlocked": None, "achievements_total": None} in rows
+
+
+def test_transient_error_skips_only_that_game(db, monkeypatch):
+    patch_steam(monkeypatch, {10: (1, 2), 20: SteamApiError("502"), 30: (4, 4)})
+
+    run(library.refresh_achievements(FakeSession(), STEAM_ID))
+
+    (rows,) = db.updates
+    assert [r["app_id"] for r in by_app(rows)] == [10, 30]  # 20 stays unchecked: retried later
+
+
+def test_rate_limit_saves_what_was_fetched_and_raises(db, monkeypatch):
+    async def fetch(steam_id, app_id):
+        if app_id == 10:
+            return (1, 2)
+        await asyncio.sleep(0.01)  # so 10 is collected before the rate limit
+        raise SteamRateLimited("429")
+
+    monkeypatch.setattr(library, "fetch_achievements", fetch)
+    session = FakeSession()
+
+    with pytest.raises(SteamRateLimited):
+        run(library.refresh_achievements(session, STEAM_ID))
+
+    (rows,) = db.updates
+    assert [r["app_id"] for r in rows] == [10]
+    assert session.commits == 1
+    assert library.get_achievements_progress(STEAM_ID) is None
 
 
 def test_progress_is_reported_and_cleared(db, monkeypatch):
@@ -191,14 +220,14 @@ def test_different_users_do_not_block_each_other(db, monkeypatch):
     assert len(db.updates) == 2
 
 
-def test_slot_is_released_after_steam_error(db, monkeypatch):
+def test_slot_is_released_after_unexpected_error(db, monkeypatch):
     patch_steam(monkeypatch, {10: (1, 1), 20: RuntimeError("boom"), 30: (1, 1)})
 
     with pytest.raises(RuntimeError):
         run(library.refresh_achievements(FakeSession(), STEAM_ID))
 
     assert library.get_achievements_progress(STEAM_ID) is None
-    assert db.updates == []  # a half-finished run writes nothing
+    assert db.updates == []  # a run broken by a bug (not by Steam) writes nothing
 
     # ...and the next attempt is allowed.
     patch_steam(monkeypatch, {10: (1, 1), 20: (1, 1), 30: (1, 1)})
@@ -231,8 +260,8 @@ def test_pending_requests_are_cancelled_after_error(db, monkeypatch):
     run(scenario())
 
 
-def test_slot_is_released_when_fresh_check_returns_early(db, monkeypatch):
-    db.last_fetch = datetime.now(timezone.utc)
+def test_slot_is_released_when_nothing_needs_checking(db, monkeypatch):
+    db.app_ids = []
     patch_steam(monkeypatch, {})
 
     run(library.refresh_achievements(FakeSession(), STEAM_ID))

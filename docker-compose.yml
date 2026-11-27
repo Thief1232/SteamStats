@@ -15,8 +15,7 @@ services:
       POSTGRES_DB: ${BACKEND_DB_NAME:?see .env.example}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Runs only when the volume is empty (first start).
-      - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # The schema is created by the backend's migrations (alembic upgrade head on start).
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -32,7 +31,6 @@ services:
       POSTGRES_DB: ${STEAMSPY_DB_NAME:?see .env.example}
     volumes:
       - steamspy_postgres_data:/var/lib/postgresql/data
-      - ./steamspy-service/src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -46,6 +44,7 @@ services:
       APP_URL: ${APP_URL:?see .env.example}
       STEAM_API_KEY: ${STEAM_API_KEY:?see .env.example}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_USER: ${BACKEND_DB_USER}
@@ -64,6 +63,7 @@ services:
       DB_USER: ${STEAMSPY_DB_USER}
       DB_PASSWORD: ${STEAMSPY_DB_PASSWORD}
       DB_NAME: ${STEAMSPY_DB_NAME}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       steamspy_postgres:
         condition: service_healthy

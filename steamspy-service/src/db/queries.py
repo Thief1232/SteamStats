@@ -5,7 +5,8 @@ from src.db.models import GameStats
 
 
 async def get_game_stats(session: AsyncSession, app_id: int) -> GameStats | None:
-    return await session.get(GameStats, app_id)
+    # populate_existing: after an upsert the session may still hold the old row.
+    return await session.get(GameStats, app_id, populate_existing=True)
 
 
 async def upsert_game_stats(session: AsyncSession, row: dict) -> None:

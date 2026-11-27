@@ -4,7 +4,8 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-from src.services import steam_search, steamspy_client
+from src.services import stats, steam_search, steamspy_client
+from src.services.http import UpstreamError
 from src.services.cache import TTL, is_stale
 from src.services.stats import parse_owners
 
@@ -62,8 +63,37 @@ def test_fetch_top_games_returns_list(mock_http):
 def test_fetch_top_games_raises_on_http_error(mock_http):
     mock_http(lambda r: httpx.Response(503))
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(UpstreamError):
         run(steamspy_client.fetch_top_games())
+
+
+def test_top_games_are_cached(mock_http):
+    requests = mock_http(lambda r: httpx.Response(200, json={"730": {"appid": 730}}))
+
+    run(stats.get_top_games())
+    run(stats.get_top_games())
+
+    assert len(requests) == 1
+
+
+def test_stale_top_games_are_served_when_steamspy_fails(mock_http, monkeypatch):
+    mock_http(lambda r: httpx.Response(200, json={"730": {"appid": 730}}))
+    run(stats.get_top_games())
+    monkeypatch.setattr(stats, "TOP_GAMES_TTL_SECONDS", 0)
+    mock_http(lambda r: httpx.Response(503))
+
+    assert [g["appid"] for g in run(stats.get_top_games())] == [730]
+
+
+def test_steamspy_requests_are_spaced_out(monkeypatch):
+    monkeypatch.setattr(steamspy_client, "MIN_INTERVAL", 0.05)
+
+    async def three_slots():
+        start = asyncio.get_running_loop().time()
+        await asyncio.gather(*(steamspy_client._wait_for_slot() for _ in range(3)))
+        return asyncio.get_running_loop().time() - start
+
+    assert 0.08 <= run(three_slots()) < 0.5
 
 
 def test_search_games_maps_store_results(mock_http):

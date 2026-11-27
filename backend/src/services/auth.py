@@ -1,3 +1,4 @@
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -11,6 +12,8 @@ from src.services.steam_client import (
     verify_openid,
 )
 
+log = logging.getLogger(__name__)
+
 SESSION_TTL = timedelta(days=30)
 
 
@@ -18,9 +21,16 @@ async def handle_callback(
     session: AsyncSession, params: dict, return_to: str
 ) -> tuple[str, int] | None:
     if not validate_openid_response(params, return_to):
+        # Most often a wrong APP_URL: Steam sends the user back to a return_to
+        # that does not match ours.
+        log.warning(
+            "Steam sign-in rejected: return_to %r, expected %r",
+            params.get("openid.return_to"), return_to,
+        )
         return None
 
     if not await verify_openid(params):
+        log.warning("Steam sign-in rejected: Steam did not confirm the signature")
         return None
 
     steam_id = extract_steam_id(params.get("openid.claimed_id", ""))
@@ -43,4 +53,5 @@ async def handle_callback(
         session, session_id, user_id, datetime.now(timezone.utc) + SESSION_TTL
     )
     await session.commit()
+    log.info("user %s signed in as steam_id %s", user_id, steam_id)
     return session_id, steam_id

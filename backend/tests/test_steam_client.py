@@ -71,8 +71,63 @@ def test_resolve_vanity_not_found(mock_http):
 def test_resolve_vanity_raises_on_http_error(mock_http):
     mock_http(lambda r: httpx.Response(500))
 
-    with pytest.raises(httpx.HTTPStatusError):
+    with pytest.raises(steam_client.SteamApiError):
         run(steam_client.resolve_vanity("whatever"))
+
+
+def test_network_error_becomes_steam_api_error(mock_http):
+    def fail(request):
+        raise httpx.ConnectError("no route", request=request)
+
+    mock_http(fail)
+
+    with pytest.raises(steam_client.SteamApiError):
+        run(steam_client.fetch_player_summary("1"))
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(429),
+        # What Steam's CDN sends when it blocks the IP: a 403 HTML page, not JSON.
+        httpx.Response(403, text="<HTML><TITLE>Access Denied</TITLE></HTML>",
+                       headers={"content-type": "text/html"}),
+    ],
+)
+def test_throttling_is_reported_and_pauses_further_calls(mock_http, response):
+    requests = mock_http(lambda r: response)
+
+    with pytest.raises(steam_client.SteamRateLimited):
+        run(steam_client.fetch_owned_games(1))
+    # During the cooldown nothing more is sent to Steam.
+    with pytest.raises(steam_client.SteamRateLimited):
+        run(steam_client.fetch_player_summary("1"))
+
+    assert len(requests) == 1
+
+
+def test_daily_budget_stops_calls_before_they_are_made(mock_http, monkeypatch):
+    requests = mock_http(lambda r: httpx.Response(200, json={"response": {"players": []}}))
+    monkeypatch.setattr(steam_client, "quota", steam_client._Quota(daily_budget=2, per_second=1e9))
+
+    run(steam_client.fetch_player_summary("1"))
+    run(steam_client.fetch_player_summary("1"))
+    with pytest.raises(steam_client.SteamRateLimited):
+        run(steam_client.fetch_player_summary("1"))
+
+    assert len(requests) == 2
+
+
+def test_quota_spaces_out_calls():
+    quota = steam_client._Quota(daily_budget=100, per_second=20)
+
+    async def three_calls():
+        start = asyncio.get_running_loop().time()
+        await asyncio.gather(quota.acquire(), quota.acquire(), quota.acquire())
+        return asyncio.get_running_loop().time() - start
+
+    # Slots at 0, 50 and 100 ms: the last call waits about 0.1 s.
+    assert 0.08 <= run(three_calls()) < 0.5
 
 
 def test_fetch_player_summary(mock_http):
@@ -136,10 +191,26 @@ def test_fetch_achievements_game_without_achievements(mock_http):
     assert run(steam_client.fetch_achievements(1, 440)) is None
 
 
-def test_fetch_achievements_error_status_returns_none(mock_http):
-    mock_http(lambda r: httpx.Response(403))
+@pytest.mark.parametrize("status", [400, 403])
+def test_fetch_achievements_definite_no_answer_returns_none(mock_http, status):
+    # 400: the game has no stats; 403: the owner hides game details. Both come as JSON.
+    mock_http(lambda r: httpx.Response(status, json={"playerstats": {"success": False}}))
 
     assert run(steam_client.fetch_achievements(1, 440)) is None
+
+
+def test_fetch_achievements_unexpected_400_is_not_taken_as_no_achievements(mock_http):
+    mock_http(lambda r: httpx.Response(400, json={"error": "bad request"}))
+
+    with pytest.raises(steam_client.SteamApiError):
+        run(steam_client.fetch_achievements(1, 440))
+
+
+def test_fetch_achievements_server_error_raises(mock_http):
+    mock_http(lambda r: httpx.Response(502))
+
+    with pytest.raises(steam_client.SteamApiError):
+        run(steam_client.fetch_achievements(1, 440))
 
 
 @pytest.mark.parametrize(("body", "expected"), [("ns:...\nis_valid:true\n", True),

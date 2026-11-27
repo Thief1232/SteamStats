@@ -1,6 +1,7 @@
 import os
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import URL
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -10,18 +11,23 @@ from sqlalchemy.ext.asyncio import (
 
 engine: AsyncEngine | None = None
 session_factory: async_sessionmaker[AsyncSession] | None = None
- 
 
-def _database_url() -> str:
-    return (
-        f"postgresql+asyncpg://{os.environ['DB_USER']}:{os.environ['DB_PASSWORD']}"
-        f"@{os.environ['DB_HOST']}:{os.environ['DB_PORT']}/{os.environ['DB_NAME']}"
-    )
+
+def database_url() -> str:
+    # URL.create escapes special characters in the password.
+    return URL.create(
+        "postgresql+asyncpg",
+        username=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        host=os.environ["DB_HOST"],
+        port=int(os.environ["DB_PORT"]),
+        database=os.environ["DB_NAME"],
+    ).render_as_string(hide_password=False)
 
 
 async def connect() -> None:
     global engine, session_factory
-    engine = create_async_engine(_database_url())
+    engine = create_async_engine(database_url())
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
 

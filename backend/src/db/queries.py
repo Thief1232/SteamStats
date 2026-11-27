@@ -1,6 +1,6 @@
 from datetime import datetime  # noqa: I001
 
-from sqlalchemy import delete, func, select, update, bindparam
+from sqlalchemy import Integer, bindparam, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,7 +41,9 @@ async def upsert_steam_account(
             "last_fetched_at": func.now(),
         },
     ).returning(SteamAccount)
-    result = await session.execute(stmt)
+    # The caller may already hold this account in the session (it checked the cache
+    # first); without populate_existing that stale object would be returned as is.
+    result = await session.execute(stmt, execution_options={"populate_existing": True})
     await session.commit()
     return result.scalar_one()
 
@@ -92,33 +94,47 @@ async def get_library(session: AsyncSession, steam_id: int) -> list:
     )
     return result.all()
 
-async def get_achievements_last_fetch(
+async def get_app_ids_needing_achievements(
     session: AsyncSession, steam_id: int
-) -> datetime | None:
+) -> list[int]:
+    """Games whose achievements may have changed since we last asked Steam.
+
+    Achievements only move while a game is played, so a game is asked about once,
+    and again only after it was played since then. Never-launched games are skipped:
+    nothing can be unlocked there, and they are often a large share of a library.
+    """
     result = await session.execute(
-        select(func.max(OwnedGame.achievements_fetched_at)).where(
-            OwnedGame.steam_id == steam_id
+        select(OwnedGame.app_id).where(
+            OwnedGame.steam_id == steam_id,
+            OwnedGame.playtime_minutes > 0,
+            or_(
+                OwnedGame.achievements_fetched_at.is_(None),
+                OwnedGame.last_played > OwnedGame.achievements_fetched_at,
+            ),
         )
-    )
-    return result.scalar_one_or_none()
-
-
-async def get_owned_app_ids(session: AsyncSession, steam_id: int) -> list[int]:
-    result = await session.execute(
-        select(OwnedGame.app_id).where(OwnedGame.steam_id == steam_id)
     )
     return list(result.scalars().all())
 
 
 async def update_achievements(session: AsyncSession, steam_id: int, rows: list[dict]) -> None:
+    """Store fetched counts and mark the games as checked.
+
+    A row with None counts means Steam had nothing to report (no achievements, or
+    hidden game details): the game is marked as checked so it is not asked about again
+    until it is played, and counts stored earlier are kept.
+    """
     if not rows:
         return
     stmt = (
         update(OwnedGame.__table__)
         .where(OwnedGame.steam_id == steam_id, OwnedGame.app_id == bindparam("b_app_id"))
         .values(
-            achievements_unlocked=bindparam("b_unlocked"),
-            achievements_total=bindparam("b_total"),
+            achievements_unlocked=func.coalesce(
+                bindparam("b_unlocked", type_=Integer), OwnedGame.achievements_unlocked
+            ),
+            achievements_total=func.coalesce(
+                bindparam("b_total", type_=Integer), OwnedGame.achievements_total
+            ),
             achievements_fetched_at=func.now(),
         )
     )

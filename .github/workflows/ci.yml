@@ -15,6 +15,27 @@ jobs:
     defaults:
       run:
         working-directory: ${{ matrix.service }}
+    # Throwaway database for the migration check.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_USER: ci
+      DB_PASSWORD: ci
+      DB_NAME: ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,6 +49,14 @@ jobs:
         run: pip install ruff && ruff check .
       - name: Test
         run: pytest -v
+      # Migrations apply to an empty DB, the models match them (a model change without
+      # a migration fails here), and downgrade/upgrade round-trips.
+      - name: Migrations
+        run: |
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head
 
   frontend:
     runs-on: ubuntu-latest

@@ -1,13 +1,25 @@
 import asyncio
+import logging
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db import queries
 from src.services.cache import is_stale
-from src.services.steam_client import fetch_achievements, fetch_owned_games
+from src.services.steam_client import (
+    SteamApiError,
+    SteamRateLimited,
+    fetch_achievements,
+    fetch_owned_games,
+)
+
+log = logging.getLogger(__name__)
 
 ACHIEVEMENTS_CONCURRENCY = 10
+
+# Marks a game whose achievements request failed transiently: it is left unchecked
+# so the next refresh asks again.
+_FAILED = object()
 
 # steam_id -> (done, total) for an in-flight refresh_achievements() call.
 # In-memory only: fine for a single-process app, purely used for progress polling.
@@ -26,7 +38,13 @@ async def _fetch_achievements_limited(
     sem: asyncio.Semaphore, steam_id: int, app_id: int
 ):
     async with sem:
-        return app_id, await fetch_achievements(steam_id, app_id)
+        try:
+            return app_id, await fetch_achievements(steam_id, app_id)
+        except SteamRateLimited:
+            raise  # stops the whole refresh
+        except SteamApiError as e:
+            log.warning("achievements of app %s for %s: %s", app_id, steam_id, e)
+            return app_id, _FAILED
 
 
 async def is_library_stale(session: AsyncSession, steam_id: int) -> bool:
@@ -39,7 +57,13 @@ async def get_or_refresh_library(session: AsyncSession, steam_id: int) -> bool:
     if not await is_library_stale(session, steam_id):
         return True
 
-    games = await fetch_owned_games(steam_id)
+    try:
+        games = await fetch_owned_games(steam_id)
+    except SteamApiError as e:
+        if await queries.get_library_last_fetch(session, steam_id) is None:
+            raise
+        log.warning("serving cached library of %s: %s", steam_id, e)
+        return True
     if games is None:
         return False
 
@@ -77,11 +101,17 @@ async def get_or_refresh_library(session: AsyncSession, steam_id: int) -> bool:
         )
     await queries.upsert_owned_games(session, owned_rows)
     await session.commit()
+    log.info("library of %s refreshed: %d games", steam_id, len(games))
     return True
 
 
 async def refresh_achievements(session: AsyncSession, steam_id: int) -> None:
-    """Fetch achievements from Steam if the data in the DB is older than the TTL.
+    """Ask Steam for achievements of the games that may have changed since last time
+    (see queries.get_app_ids_needing_achievements) and store them.
+
+    A game that fails transiently is skipped and asked again next time. If Steam
+    rate-limits us, the remaining requests are dropped, what was fetched is saved,
+    and SteamRateLimited is raised.
 
     Raises AchievementsRefreshInProgress if a refresh for this steam_id is already running.
     """
@@ -92,11 +122,9 @@ async def refresh_achievements(session: AsyncSession, steam_id: int) -> None:
 
     tasks: list[asyncio.Task] = []
     try:
-        last_fetched = await queries.get_achievements_last_fetch(session, steam_id)
-        if last_fetched is not None and not is_stale(last_fetched):
+        app_ids = await queries.get_app_ids_needing_achievements(session, steam_id)
+        if not app_ids:
             return
-
-        app_ids = await queries.get_owned_app_ids(session, steam_id)
         total = len(app_ids)
         _achievements_progress[steam_id] = (0, total)
 
@@ -108,21 +136,36 @@ async def refresh_achievements(session: AsyncSession, steam_id: int) -> None:
 
         rows = []
         done = 0
+        failed = 0
+        rate_limited = False
         for task in asyncio.as_completed(tasks):
-            app_id, ach = await task
+            try:
+                app_id, ach = await task
+            except SteamRateLimited:
+                rate_limited = True
+                break
             done += 1
             _achievements_progress[steam_id] = (done, total)
-            if ach is not None:
-                rows.append(
-                    {
-                        "app_id": app_id,
-                        "achievements_unlocked": ach[0],
-                        "achievements_total": ach[1],
-                    }
-                )
+            if ach is _FAILED:
+                failed += 1
+                continue
+            rows.append(
+                {
+                    "app_id": app_id,
+                    "achievements_unlocked": ach[0] if ach else None,
+                    "achievements_total": ach[1] if ach else None,
+                }
+            )
 
         await queries.update_achievements(session, steam_id, rows)
         await session.commit()
+        log.info(
+            "achievements of %s: %d of %d games checked, %d failed%s",
+            steam_id, len(rows), total, failed,
+            ", stopped by Steam rate limit" if rate_limited else "",
+        )
+        if rate_limited:
+            raise SteamRateLimited(f"achievements refresh for {steam_id} stopped early")
     finally:
         for task in tasks:
             task.cancel()

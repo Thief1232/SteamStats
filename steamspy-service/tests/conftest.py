@@ -1,12 +1,22 @@
 import httpx
 import pytest
 
+from src.services import http, stats, steamspy_client
+
 _RealAsyncClient = httpx.AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def no_pacing_no_cache(monkeypatch):
+    """Tests neither wait for SteamSPY's 1 req/s pacing nor share the top-games cache."""
+    monkeypatch.setattr(steamspy_client, "MIN_INTERVAL", 0.0)
+    monkeypatch.setattr(steamspy_client, "_next_slot", 0.0)
+    monkeypatch.setattr(stats, "_top_games", None)
 
 
 @pytest.fixture
 def mock_http(monkeypatch):
-    """Route every httpx.AsyncClient request to a handler instead of the network.
+    """Route every outgoing request to a handler instead of the network.
 
     Usage: requests = mock_http(lambda request: httpx.Response(200, json=...))
     Returns the list of requests that were made.
@@ -20,12 +30,7 @@ def mock_http(monkeypatch):
             return handler(request)
 
         transport = httpx.MockTransport(recording_handler)
-
-        def client_factory(*args, **kwargs):
-            kwargs["transport"] = transport
-            return _RealAsyncClient(*args, **kwargs)
-
-        monkeypatch.setattr(httpx, "AsyncClient", client_factory)
+        monkeypatch.setattr(http, "_http", _RealAsyncClient(transport=transport))
         return requests
 
     return install
