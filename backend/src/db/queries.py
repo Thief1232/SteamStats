@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime  # noqa: I001
 
 from sqlalchemy import Integer, bindparam, delete, func, or_, select, update
@@ -166,25 +167,46 @@ async def link_steam_account(session: AsyncSession, steam_id: int, user_id: int)
     )
 
 
+def session_key(token: str) -> str:
+    """Sessions are stored under the SHA-256 of the cookie token, so the database (and
+    its backups) hold nothing that can be used as a cookie. The token is random and
+    long, so a plain hash is enough; no salt or slow KDF is needed."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 async def create_session(
-    session: AsyncSession, session_id: str, user_id: int, expires_at: datetime
+    session: AsyncSession, token: str, user_id: int, expires_at: datetime
 ) -> None:
+    # Housekeeping: expired sessions are useless, drop them while we are here.
+    await session.execute(delete(Session).where(Session.expires_at <= func.now()))
     session.add(
-        Session(id=session_id, user_id=user_id, created_at=func.now(), expires_at=expires_at)
+        Session(
+            id=session_key(token), user_id=user_id, created_at=func.now(), expires_at=expires_at
+        )
     )
 
 
-async def get_session_user(session: AsyncSession, session_id: str) -> User | None:
+async def get_session_user(session: AsyncSession, token: str) -> User | None:
     result = await session.execute(
         select(User)
         .join(Session, Session.user_id == User.id)
-        .where(Session.id == session_id, Session.expires_at > func.now())
+        .where(Session.id == session_key(token), Session.expires_at > func.now())
     )
     return result.scalar_one_or_none()
 
 
-async def delete_session(session: AsyncSession, session_id: str) -> None:
-    await session.execute(delete(Session).where(Session.id == session_id))
+async def delete_session(session: AsyncSession, token: str) -> None:
+    await session.execute(delete(Session).where(Session.id == session_key(token)))
+
+
+async def lock_steam_account(session: AsyncSession, steam_id: int) -> SteamAccount:
+    """Re-read the account with a row lock held until commit, so two sign-ins of the
+    same new user cannot both decide it has no user yet."""
+    result = await session.execute(
+        select(SteamAccount).where(SteamAccount.steam_id == steam_id).with_for_update(),
+        execution_options={"populate_existing": True},
+    )
+    return result.scalar_one()
 
 
 async def get_steam_account_by_user(session: AsyncSession, user_id: int) -> SteamAccount | None:

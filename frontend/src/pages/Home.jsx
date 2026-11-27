@@ -45,8 +45,13 @@ export default function Home() {
   }
 
   async function handleLogout() {
-    await logout();
-    window.location.reload();
+    try {
+      await logout();
+    } finally {
+      // Reload either way: on failure the page shows the session as still active, and
+      // the user can retry, instead of the button silently doing nothing.
+      window.location.reload();
+    }
   }
 
   return (

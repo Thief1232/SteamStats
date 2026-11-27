@@ -21,7 +21,7 @@ async def get_top_games_route():
     games = await get_top_games()
     result = []
     for g in games:
-        owners_min, owners_max = parse_owners(g["owners"])
+        owners_min, owners_max = parse_owners(g.get("owners"))
         result.append(
             GameStatsResponse(
                 app_id=g["appid"],

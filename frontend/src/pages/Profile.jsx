@@ -51,16 +51,12 @@ export default function Profile() {
   // Loading achievements costs Steam API quota, so the server allows it only when signed in.
   const [achNeedsSignIn, setAchNeedsSignIn] = useState(false);
   const signedOut = me === null || achNeedsSignIn;
+  // app_id -> SteamSPY stats, or null once the request finished without data.
   const [gameStats, setGameStats] = useState({});
 
+  // State starts fresh for every profile: App.jsx remounts this component per lookup.
   useEffect(() => {
     let cancelled = false;
-    setUser(undefined);
-    setLibrary(undefined);
-    setAchLoading(false);
-    setAchError(false);
-    setAchProgress(null);
-    setGameStats({});
 
     getUser(lookup)
       .then((u) => {
@@ -83,28 +79,31 @@ export default function Profile() {
 
   // SteamSPY data is shared by all players — load it for the 12 most played games,
   // not the whole library, to avoid piling up requests to steamspy-service.
-  useEffect(() => {
-    if (!library || typeof library !== 'object') return;
-    let cancelled = false;
-
-    const topAppIds = [...library.games]
+  const topAppIds = useMemo(() => {
+    if (!library || typeof library !== 'object') return [];
+    return [...library.games]
       .sort((a, b) => b.playtime_minutes - a.playtime_minutes)
       .slice(0, 12)
       .map((g) => g.app_id);
+  }, [library]);
+  const gameStatsLoading = topAppIds.some((id) => !(id in gameStats));
 
-    Promise.allSettled(topAppIds.map((id) => getGameStats(id))).then((results) => {
-      if (cancelled) return;
-      const next = {};
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled' && r.value) next[topAppIds[i]] = r.value;
-      });
-      setGameStats(next);
+  useEffect(() => {
+    let cancelled = false;
+    const store = (id, value) => !cancelled && setGameStats((prev) => ({ ...prev, [id]: value }));
+
+    // steamspy-service asks SteamSPY at most once a second, so a cold cache takes a
+    // while: show each game as soon as it arrives instead of waiting for all of them.
+    topAppIds.forEach((id) => {
+      getGameStats(id)
+        .then((s) => store(id, s || null))
+        .catch(() => store(id, null)); // a game without SteamSPY data is simply left out
     });
 
     return () => {
       cancelled = true;
     };
-  }, [library]);
+  }, [topAppIds]);
 
   function handleSignInForAchievements() {
     // Come back to this profile, not to the visitor's own one.
@@ -283,7 +282,14 @@ ${user === 'not_found' ? 'Profile not found.' : 'Could not load the data. Please
           </TerminalWindow>
 
           {communityGames.length > 0 && (
-            <TerminalWindow title="C:\STEAMSTATS\COMMUNITY.LOG" right={<span>STEAMSPY · {communityGames.length} GAMES</span>}>
+            <TerminalWindow
+              title="C:\STEAMSTATS\COMMUNITY.LOG"
+              right={
+                <span>
+                  STEAMSPY · {communityGames.length} GAMES{gameStatsLoading && ' · LOADING'}
+                </span>
+              }
+            >
               <div className="list">
                 {communityGames.map(({ game, spy, ratio }) => {
                   const rating = spy.positive + spy.negative > 0 ? (spy.positive / (spy.positive + spy.negative)) * 100 : null;

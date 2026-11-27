@@ -41,6 +41,9 @@ async def handle_callback(
     if account is None:
         return None
 
+    # Two callbacks of the same new user (double click, two tabs) must not both create
+    # a user: lock the row and decide on what it says now.
+    account = await queries.lock_steam_account(session, steam_id)
     if account.user_id is None:
         user = await queries.create_user(session, account.persona_name)
         await queries.link_steam_account(session, steam_id, user.id)
@@ -48,7 +51,7 @@ async def handle_callback(
     else:
         user_id = account.user_id
 
-    session_id = secrets.token_urlsafe(32)
+    session_id = secrets.token_urlsafe(32)  # goes to the cookie; the DB keeps its hash
     await queries.create_session(
         session, session_id, user_id, datetime.now(timezone.utc) + SESSION_TTL
     )

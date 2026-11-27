@@ -6,6 +6,20 @@ from src.services import http, stats, steamspy_client
 _RealAsyncClient = httpx.AsyncClient
 
 
+def _refuse_network(request: httpx.Request) -> httpx.Response:
+    raise RuntimeError(
+        f"test tried to reach the network: {request.method} {request.url.host}{request.url.path}"
+        " (use the mock_http fixture or patch the fetch function)"
+    )
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Tests never talk to Steam: a request nobody mocked fails loudly instead of
+    going out from the developer's IP (Steam blocks IPs that send bursts)."""
+    monkeypatch.setattr(http, "_http", _RealAsyncClient(transport=httpx.MockTransport(_refuse_network)))
+
+
 @pytest.fixture(autouse=True)
 def no_pacing_no_cache(monkeypatch):
     """Tests neither wait for SteamSPY's 1 req/s pacing nor share the top-games cache."""

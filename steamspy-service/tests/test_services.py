@@ -26,6 +26,11 @@ def test_parse_owners(raw, expected):
     assert parse_owners(raw) == expected
 
 
+@pytest.mark.parametrize("raw", [None, "", "unknown", "1,000 .. many", "1 .. 2 .. 3"])
+def test_parse_owners_unexpected_value_gives_none(raw):
+    assert parse_owners(raw) == (None, None)
+
+
 def test_cache_ttl():
     now = datetime.now(timezone.utc)
     assert not is_stale(now - TTL + timedelta(minutes=1))
@@ -114,3 +119,9 @@ def test_search_games_no_items(mock_http):
     mock_http(lambda r: httpx.Response(200, json={"total": 0}))
 
     assert run(steam_search.search_games("zzzz")) == []
+
+
+def test_unmocked_request_fails_instead_of_reaching_steamspy():
+    # The autouse no_network fixture (conftest.py) is what makes this raise.
+    with pytest.raises(RuntimeError, match="tried to reach the network"):
+        run(steamspy_client.fetch_all_stats(730))

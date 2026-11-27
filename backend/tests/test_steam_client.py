@@ -223,3 +223,9 @@ def test_verify_openid(mock_http, body, expected):
     # The verification request must switch the mode, but not mutate the input.
     assert b"openid.mode=check_authentication" in requests[0].content
     assert params["openid.mode"] == "id_res"
+
+
+def test_unmocked_request_fails_instead_of_reaching_steam():
+    # The autouse no_network fixture (conftest.py) is what makes this raise.
+    with pytest.raises(RuntimeError, match="tried to reach the network"):
+        run(steam_client.fetch_player_summary("1"))

@@ -16,9 +16,15 @@ TOP_GAMES_TTL_SECONDS = 3600
 _top_games: tuple[float, list[dict]] | None = None  # (monotonic time fetched, games)
 
 
-def parse_owners(raw: str) -> tuple[int, int]:
-    low, high = raw.split(" .. ")
-    return int(low.replace(",", "")), int(high.replace(",", ""))
+def parse_owners(raw: str | None) -> tuple[int | None, int | None]:
+    """SteamSPY's owners range, e.g. "1,000,000 .. 2,000,000". An unexpected value gives
+    (None, None) instead of failing the whole response."""
+    try:
+        low, high = raw.split(" .. ")
+        return int(low.replace(",", "")), int(high.replace(",", ""))
+    except (AttributeError, ValueError):
+        log.warning("unexpected SteamSPY owners value: %r", raw)
+        return None, None
 
 
 async def get_or_refresh_stats(session: AsyncSession, app_id: int):
@@ -37,7 +43,7 @@ async def get_or_refresh_stats(session: AsyncSession, app_id: int):
         log.info("SteamSPY has no data for app %s", app_id)
         return existing
 
-    owners_min, owners_max = parse_owners(data["owners"])
+    owners_min, owners_max = parse_owners(data.get("owners"))
     await queries.upsert_game_stats(
         session,
         {
